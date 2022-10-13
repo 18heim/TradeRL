@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "trade-rl"
+version = "0.1.0"
+description = ""
+authors = ["18heim <christopher.heim@mines-paristech.fr>"]
+packages = [{ include = "trade_rl", from = "src" }]
+license = "MIT license"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+alpaca-trade-api = "^2.3.0"
+yfinance = "^0.1.77"
+stockstats = "^0.4.1"
+ccxt = "^2.0.6"
+elegantrl = "^0.3.3"
+pandas = "^1.5.0"
+exchange-calendars = "^4.2.3"
+trading-calendars = "^2.1.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+ipykernel = "^6.16.0"
+
+[tool.poetry.group.dev.dependencies]
+autopep8 = "^1.7.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
