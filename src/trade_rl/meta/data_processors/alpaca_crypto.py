@@ -53,8 +53,9 @@ class AlpacaCrypto(_Base):
         """
         self.time_zone = TIME_ZONE_SELFDEFINED
         start_date = pd.Timestamp(
-            start_date, tz=self.time_zone).date().isoformat()
-        end_date = pd.Timestamp(end_date, tz=self.time_zone).date().isoformat()
+            self.start_date, tz=self.time_zone).date().isoformat()
+        end_date = pd.Timestamp(
+            self.end_date, tz=self.time_zone).date().isoformat()
         self.dataframe = self.api.get_crypto_bars(
             ticker_list,
             self.time_interval,
@@ -66,7 +67,7 @@ class AlpacaCrypto(_Base):
         self.dataframe["time"] = self.dataframe["timestamp"].apply(
             lambda x: x.strftime("%Y-%m-%d %H:%M:%S")
         )
-        self.dataframe = self.dataframe.rename(colunms={"symbol": "tic"})
+        self.dataframe = self.dataframe.rename(columns={"symbol": "tic"})
 
     def fetch_latest_data(
         self, ticker_list, time_interval, tech_indicator_list, limit=100
@@ -77,7 +78,7 @@ class AlpacaCrypto(_Base):
         data_df["time"] = data_df["timestamp"].apply(
             lambda x: x.strftime("%Y-%m-%d %H:%M:%S")
         )
-        data_df = data_df.rename(colunms={"symbol": "tic"})
+        data_df = data_df.rename(columns={"symbol": "tic"})
         data_df = data_df.reset_index(drop=True)
 
         df = self.add_technical_indicator(data_df, tech_indicator_list)
