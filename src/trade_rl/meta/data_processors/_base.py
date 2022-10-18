@@ -129,40 +129,8 @@ class _Base:
         if "level_0" in self.dataframe.columns and "tic" not in self.dataframe.columns:
             self.dataframe.rename(columns={"level_0": "tic"}, inplace=True)
         print("tech_indicator_list: ", tech_indicator_list)
-        stock = stockstats.StockDataFrame.retype(self.dataframe)
-        unique_ticker = stock.tic.unique()
-        for indicator in tech_indicator_list:
-            print("indicator: ", indicator)
-            indicator_df = pd.DataFrame()
-            for i in range(len(unique_ticker)):
-                try:
-                    temp_indicator = stock[stock.tic ==
-                                           unique_ticker[i]][indicator]
-                    temp_indicator = pd.DataFrame(temp_indicator)
-                    temp_indicator["tic"] = unique_ticker[i]
-                    temp_indicator["time"] = self.dataframe[
-                        self.dataframe.tic == unique_ticker[i]
-                    ]["time"].to_list()
-                    indicator_df = pd.concat(
-                        [indicator_df, temp_indicator],
-                        axis=0,
-                        join="outer",
-                        ignore_index=True,
-                    )
-                except Exception as e:
-                    print(e)
-            if not indicator_df.empty:
-                self.dataframe = self.dataframe.merge(
-                    indicator_df[["tic", "time", indicator]],
-                    on=["tic", "time"],
-                    how="left",
-                )
-        self.dataframe.sort_values(by=["time", "tic"], inplace=True)
-        time_to_drop = self.dataframe[self.dataframe.isna().any(
-            axis=1)].time.unique()
-        self.dataframe = self.dataframe[~self.dataframe.time.isin(
-            time_to_drop)]
-        self.dataframe[tech_indicator_list] = self.dataframe[tech_indicator_list].backfill()
+        self.dataframe = add_tech_indicator(
+            self.dataframe, tech_indicator_list)
         print("Succesfully add technical indicators")
 
     def add_turbulence(self):
@@ -285,40 +253,7 @@ class _Base:
         self.dataframe = df
 
     def df_to_array(self, tech_indicator_list: List[str], if_vix: bool):
-        unique_ticker = self.dataframe.tic.unique()
-        price_array = np.column_stack(
-            [self.dataframe[self.dataframe.tic == tic].close for tic in unique_ticker]
-        )
-        common_tech_indicator_list = [
-            i
-            for i in tech_indicator_list
-            if i in self.dataframe.columns.values.tolist()
-        ]
-        tech_array = np.hstack(
-            [
-                self.dataframe.loc[
-                    (self.dataframe.tic == tic), common_tech_indicator_list
-                ]
-                for tic in unique_ticker
-            ]
-        )
-        if if_vix:
-            risk_array = np.column_stack(
-                [self.dataframe[self.dataframe.tic == tic].vix for tic in unique_ticker]
-            )
-        else:
-            risk_array = (
-                np.column_stack(
-                    [
-                        self.dataframe[self.dataframe.tic == tic].turbulence
-                        for tic in unique_ticker
-                    ]
-                )
-                if "turbulence" in self.dataframe.columns
-                else None
-            )
-        print("Successfully transformed into array")
-        return price_array, tech_array, risk_array
+        return df_to_array(self.dataframe, tech_indicator_list, if_vix)
 
     # standard_time_interval  s: second, m: minute, h: hour, d: day, w: week, M: month, q: quarter, y: year
     # output time_interval of the processor
@@ -467,6 +402,81 @@ def time_convert(x: str):
         return time_span
     else:
         raise ValueError(f"{x} is an incorrect time format")
+
+
+def add_tech_indicator(dataframe: pd.DataFrame, tech_indicator_list: List[str]):
+    stock = stockstats.StockDataFrame.retype(dataframe)
+    unique_ticker = stock.tic.unique()
+    for indicator in tech_indicator_list:
+        print("indicator: ", indicator)
+        indicator_df = pd.DataFrame()
+        for i in range(len(unique_ticker)):
+            try:
+                temp_indicator = stock[stock.tic ==
+                                       unique_ticker[i]][indicator]
+                temp_indicator = pd.DataFrame(temp_indicator)
+                temp_indicator["tic"] = unique_ticker[i]
+                temp_indicator["time"] = dataframe[
+                    dataframe.tic == unique_ticker[i]
+                ]["time"].to_list()
+                indicator_df = pd.concat(
+                    [indicator_df, temp_indicator],
+                    axis=0,
+                    join="outer",
+                    ignore_index=True,
+                )
+            except Exception as e:
+                print(e)
+        if not indicator_df.empty:
+            dataframe = dataframe.merge(
+                indicator_df[["tic", "time", indicator]],
+                on=["tic", "time"],
+                how="left",
+            )
+    dataframe.sort_values(by=["time", "tic"], inplace=True)
+    time_to_drop = dataframe[dataframe.isna().any(
+        axis=1)].time.unique()
+    dataframe = dataframe[~dataframe.time.isin(
+        time_to_drop)]
+    dataframe[tech_indicator_list] = dataframe[tech_indicator_list].backfill()
+    return dataframe
+
+
+def df_to_array(dataframe: pd.DataFrame, tech_indicator_list: List[str], if_vix: bool):
+    unique_ticker = dataframe.tic.unique()
+    price_array = np.column_stack(
+        [dataframe[dataframe.tic == tic].close for tic in unique_ticker]
+    )
+    common_tech_indicator_list = [
+        i
+        for i in tech_indicator_list
+        if i in dataframe.columns.values.tolist()
+    ]
+    tech_array = np.hstack(
+        [
+            dataframe.loc[
+                (dataframe.tic == tic), common_tech_indicator_list
+            ]
+            for tic in unique_ticker
+        ]
+    )
+    if if_vix:
+        risk_array = np.column_stack(
+            [dataframe[dataframe.tic == tic].vix for tic in unique_ticker]
+        )
+    else:
+        risk_array = (
+            np.column_stack(
+                [
+                    dataframe[dataframe.tic == tic].turbulence
+                    for tic in unique_ticker
+                ]
+            )
+            if "turbulence" in dataframe.columns
+            else None
+        )
+    print("Successfully transformed into array")
+    return price_array, tech_array, risk_array
 
 
 def calc_time_zone(

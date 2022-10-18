@@ -17,7 +17,7 @@ except:
     print("Use trading_calendars instead for alpaca processor.")
 from trade_rl.meta.config import TIME_ZONE_SELFDEFINED
 # from basic_processor import _Base
-from trade_rl.meta.data_processors._base import _Base, calc_time_zone
+from trade_rl.meta.data_processors._base import _Base, calc_time_zone, add_tech_indicator, df_to_array
 
 
 class AlpacaCrypto(_Base):
@@ -82,11 +82,11 @@ class AlpacaCrypto(_Base):
         data_df = data_df.rename(columns={"symbol": "tic"})
         data_df = data_df.reset_index(drop=True)
 
-        df = self.add_technical_indicator(data_df, tech_indicator_list)
+        df = add_tech_indicator(data_df, tech_indicator_list)
         df["VIXY"] = 0
 
-        price_array, tech_array, turbulence_array = self.df_to_array(
-            df, tech_indicator_list, if_vix=True
+        price_array, tech_array, turbulence_array = df_to_array(
+            df, tech_indicator_list, if_vix=False
         )
         latest_price = price_array[-1]
         latest_tech = tech_array[-1]
