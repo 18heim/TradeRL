@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 
 from trade_rl.meta.data_processors.alpaca_crypto import AlpacaCrypto
+from trade_rl.meta.data_processors._base import time_convert
 
 
 class AlpacaPaperTradingMultiCrypto:
@@ -104,7 +105,7 @@ class AlpacaPaperTradingMultiCrypto:
             last_equity = float(self.alpaca.get_account().last_equity)
             cur_time = time.time()
             self.equities.append([cur_time, last_equity])
-            time.sleep(self.time_interval)
+            time.sleep(time_convert(self.time_interval))
 
     def trade(self):
         # Get state
@@ -175,7 +176,8 @@ class AlpacaPaperTradingMultiCrypto:
         print("Trade finished")
 
     def get_state(self):
-        alpaca = AlpacaCrypto(api=self.alpaca)
+        alpaca = AlpacaCrypto(data_source="alpacacrypto",
+                              API=self.alpaca, time_interval=self.time_interval)
 
         price_array, tech_array, _ = alpaca.fetch_latest_data(
             ticker_list=self.stockUniverse,

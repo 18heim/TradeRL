@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import alpaca_trade_api as tradeapi
 import numpy as np
@@ -23,14 +23,15 @@ from trade_rl.meta.data_processors._base import _Base, calc_time_zone
 class AlpacaCrypto(_Base):
     def __init__(
         self,
-        data_source: str,
-        start_date: str,
-        end_date: str,
-        time_interval: str,
-        **kwargs
+        data_source: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        time_interval: Optional[str] = None,
+        API: Optional[tradeapi.REST] = None,
+        ** kwargs
     ):
         super().__init__(data_source, start_date, end_date, time_interval, **kwargs)
-        if kwargs.get("API") is None:
+        if API is None:
             try:
                 self.api = tradeapi.REST(
                     kwargs["API_KEY"],
@@ -41,7 +42,7 @@ class AlpacaCrypto(_Base):
             except BaseException:
                 raise ValueError("Wrong Account Info!")
         else:
-            self.api = kwargs["API"]
+            self.api = API
 
     def download_data(
         self, ticker_list: List[str]
@@ -89,10 +90,11 @@ class AlpacaCrypto(_Base):
         )
         latest_price = price_array[-1]
         latest_tech = tech_array[-1]
-        turb_df = self.api.get_barset(
-            ["VIXY"], time_interval).df.tail(1)["VIXY"]
-        latest_turb = turb_df["close"].values
-        return latest_price, latest_tech, latest_turb
+        # TODO: Investigate turbulence / VIXY
+        # turb_df = self.api.get_barset(
+        #     ["VIXY"], time_interval).df.tail(1)["VIXY"]
+        # latest_turb = turb_df["close"].values
+        return latest_price, latest_tech, None
 
     def get_portfolio_history(self, start, end):
         trading_days = self.get_trading_days(start, end)

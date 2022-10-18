@@ -61,13 +61,14 @@ class Alpaca(_Base):
             self.api = kwargs["API"]
 
     def download_data(
-        self, ticker_list : List[str]
+        self, ticker_list: List[str]
     ) -> pd.DataFrame:
         self.time_zone = calc_time_zone(
             ticker_list, TIME_ZONE_SELFDEFINED, USE_TIME_ZONE_SELFDEFINED
         )
         start_date = pd.Timestamp(self.start_date, tz=self.time_zone)
-        end_date = pd.Timestamp(self.end_date, tz=self.time_zone) + pd.Timedelta(days=1)
+        end_date = pd.Timestamp(
+            self.end_date, tz=self.time_zone) + pd.Timedelta(days=1)
 
         date = start_date
         data_df = pd.DataFrame()
@@ -108,7 +109,8 @@ class Alpaca(_Base):
         # produce full time index
         times = []
         for day in trading_days:
-            current_time = pd.Timestamp(day + " 09:30:00").tz_localize(self.time_zone)
+            current_time = pd.Timestamp(
+                day + " 09:30:00").tz_localize(self.time_zone)
             for _ in range(390):
                 times.append(current_time)
                 current_time += pd.Timedelta(minutes=1)
@@ -195,7 +197,8 @@ class Alpaca(_Base):
 
         data_df = pd.DataFrame()
         for tic in ticker_list:
-            barset = self.api.get_barset([tic], time_interval, limit=limit).df[tic]
+            barset = self.api.get_barset(
+                [tic], time_interval, limit=limit).df[tic]
             barset["tic"] = tic
             barset = barset.reset_index()
             data_df = data_df.append(barset)
@@ -275,7 +278,8 @@ class Alpaca(_Base):
         )
         latest_price = price_array[-1]
         latest_tech = tech_array[-1]
-        turb_df = self.api.get_barset(["VIXY"], time_interval, limit=1).df["VIXY"]
+        turb_df = self.api.get_barset(
+            ["VIXY"], time_interval, limit=1).df["VIXY"]
         latest_turb = turb_df["close"].values
         return latest_price, latest_tech, latest_turb
 

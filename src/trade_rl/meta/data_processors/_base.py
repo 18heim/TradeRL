@@ -5,6 +5,7 @@ import zipfile
 from datetime import *
 from pathlib import Path
 from typing import List
+import re
 
 import numpy as np
 import pandas as pd
@@ -42,8 +43,6 @@ class _Base:
         **kwargs,
     ):
         self.data_source: str = data_source
-        self.start_date: str = start_date
-        self.end_date: str = end_date
         self.time_interval: str = time_interval  # standard time_interval
         # transferred_time_interval will be supported in the future.
         # self.nonstandard_time_interval: str = self.calc_nonstandard_time_interval()  # transferred time_interval of this processor
@@ -52,6 +51,8 @@ class _Base:
         self.dictnumpy: dict = (
             {}
         )  # e.g., self.dictnumpy["open"] = np.array([1, 2, 3]), self.dictnumpy["close"] = np.array([1, 2, 3])
+        self.start_date = start_date
+        self.end_date = end_date
 
     def download_data(self, ticker_list: List[str]):
         pass
@@ -273,7 +274,7 @@ class _Base:
             pass
         df = self.dataframe.copy()
         self.dataframe = [ticker]
-        self.download_data(self.start, self.end, self.time_interval)
+        self.download_data(self.start_date, self.end_date, self.time_interval)
         self.clean_data()
         # vix = cleaned_vix[["time", "close"]]
         # vix = vix.rename(columns={"close": "VIXY"})
@@ -322,8 +323,8 @@ class _Base:
     # standard_time_interval  s: second, m: minute, h: hour, d: day, w: week, M: month, q: quarter, y: year
     # output time_interval of the processor
     def calc_nonstandard_time_interval(self) -> str:
-        if self.data_source == "alpaca":
-            pass
+        if self.data_source == "alpaca" or self.data_source == "alpacacrypto":
+            time_intervals = ["5Min", "5Min", "1D"]
         elif self.data_source == "baostock":
             # nonstandard_time_interval: 默认为d，日k线；d=日k线、w=周、m=月、5=5分钟、15=15分钟、30=30分钟、60=60分钟k线数据，不区分大小写；指数没有分钟线数据；周线每周最后一个交易日才可以获取，月线每月最后一个交易日才可以获取。
             pass
@@ -451,6 +452,21 @@ class _Base:
     # "000612.XSHE" -> "sz.000612"
     def transfer_standard_ticker_to_nonstandard(self, ticker: str) -> str:
         return ticker
+
+
+def time_convert(x: str):
+    time_span = int(re.findall(r'^\d+', x)[0])
+    unit = re.findall(r'\D+', x)[0].lower()
+    if "m" in unit:
+        return time_span * 60
+    elif "d" in unit:
+        return time_span * 24 * 60 * 60
+    elif "w" in unit:
+        return time_span * 24 * 60 * 60 * 7
+    elif "s" in unit:
+        return time_span
+    else:
+        raise ValueError(f"{x} is an incorrect time format")
 
 
 def calc_time_zone(
