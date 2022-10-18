@@ -11,17 +11,16 @@ from stable_baselines3 import TD3
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.noise import OrnsteinUhlenbeckActionNoise
-from stable_baselines3.common.vec_env import DummyVecEnv
 
-from meta import config
-from meta.env_stock_trading.env_stock_trading import StockTradingEnv
+from trade_rl.meta import config
 
 # RL models from stable-baselines
 
 
 MODELS = {"a2c": A2C, "ddpg": DDPG, "td3": TD3, "sac": SAC, "ppo": PPO}
 
-MODEL_KWARGS = {x: config.__dict__[f"{x.upper()}_PARAMS"] for x in MODELS.keys()}
+MODEL_KWARGS = {x: config.__dict__[f"{x.upper()}_PARAMS"]
+                for x in MODELS.keys()}
 
 NOISE = {
     "normal": NormalActionNoise,
@@ -39,9 +38,11 @@ class TensorboardCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         try:
-            self.logger.record(key="train/reward", value=self.locals["rewards"][0])
+            self.logger.record(key="train/reward",
+                               value=self.locals["rewards"][0])
         except BaseException:
-            self.logger.record(key="train/reward", value=self.locals["reward"][0])
+            self.logger.record(key="train/reward",
+                               value=self.locals["reward"][0])
         return True
 
 
@@ -120,8 +121,10 @@ class DRLAgent:
             # actions_memory = test_env.env_method(method_name="save_action_memory")
             test_obs, rewards, dones, info = test_env.step(action)
             if i == (len(environment.df.index.unique()) - 2):
-                account_memory = test_env.env_method(method_name="save_asset_memory")
-                actions_memory = test_env.env_method(method_name="save_action_memory")
+                account_memory = test_env.env_method(
+                    method_name="save_asset_memory")
+                actions_memory = test_env.env_method(
+                    method_name="save_action_memory")
             if dones[0]:
                 print("hit end!")
                 break
@@ -150,7 +153,8 @@ class DRLAgent:
 
             total_asset = (
                 environment.cash
-                + (environment.price_array[environment.time] * environment.stocks).sum()
+                + (environment.price_array[environment.time]
+                   * environment.stocks).sum()
             )
             episode_total_assets.append(total_asset)
             episode_return = total_asset / environment.initial_total_asset

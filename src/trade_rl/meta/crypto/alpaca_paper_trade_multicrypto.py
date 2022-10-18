@@ -18,36 +18,29 @@ class AlpacaPaperTradingMultiCrypto:
         self,
         ticker_list,
         time_interval,
-        drl_lib,
         agent,
         cwd,
-        net_dim,
-        state_dim,
         action_dim,
         API_KEY,
         API_SECRET,
         API_BASE_URL,
         tech_indicator_list,
         max_stock=1e2,
-        latency=None,
     ):
         # load agent
-        self.drl_lib = drl_lib
-        if agent != "ppo":
-            raise ValueError("Agent input is NOT supported yet.")
+        # load agent
+        if agent == "ppo":
+            from stable_baselines3 import PPO
 
-        if drl_lib == "elegantrl":
-            from elegantrl.agent import AgentPPO
-
-            # load agent
             try:
-                agent = AgentPPO()
-                agent.init(net_dim, state_dim, action_dim)
-                agent.save_or_load_agent(cwd=cwd, if_save=False)
-                self.act = agent.act
-                self.device = agent.device
+                # load agent
+                self.model = PPO.load(cwd)
+                print("Successfully load model", cwd)
             except:
                 raise ValueError("Fail to load agent!")
+        else:
+            raise ValueError("Agent input is NOT supported yet.")
+
         # connect to Alpaca trading API
         try:
             self.alpaca = tradeapi.REST(
@@ -64,6 +57,7 @@ class AlpacaPaperTradingMultiCrypto:
         self.lookback = 1
         self.action_dim = action_dim
         self.action_decimals = 2
+        self.time_interval = time_interval
 
         # initialize account
         self.stocks = np.asarray([0] * len(ticker_list))  # stocks holding
@@ -117,16 +111,9 @@ class AlpacaPaperTradingMultiCrypto:
         state = self.get_state()
 
         # Get action
-        if self.drl_lib != "elegantrl":
-            raise ValueError(
-                "The DRL library input is NOT supported yet. Please check your input."
-            )
-
-        with torch.no_grad():
-            s_tensor = torch.as_tensor((state,), device=self.device)
-            a_tensor = self.act(s_tensor)
-            action = a_tensor.detach().cpu().numpy()[0]
+        action = self.model.predict(state)[0]
         action = (action * self.max_stock).astype(float)
+
         print("\n" + "ACTION:    ", action, "\n")
         # Normalize action
         action_norm_vector = []
@@ -192,7 +179,7 @@ class AlpacaPaperTradingMultiCrypto:
 
         price_array, tech_array, _ = alpaca.fetch_latest_data(
             ticker_list=self.stockUniverse,
-            time_interval="1Min",
+            time_interval=self.time_interval,
             tech_indicator_list=self.tech_indicator_list,
         )
 

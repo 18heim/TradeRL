@@ -3,59 +3,43 @@ import threading
 import time
 
 import alpaca_trade_api as tradeapi
-import gym
 import numpy as np
 import pandas as pd
-import torch
 
-from meta.data_processors.alpaca import Alpaca
+from trade_rl.meta.data_processors.alpaca import Alpaca
 
 
-class AlpacaPaperTrading_erl:
+class AlpacaPaperTrading:
     def __init__(
         self,
         ticker_list,
         time_interval,
         agent,
         cwd,
-        net_dim,
-        state_dim,
-        action_dim,
         API_KEY,
         API_SECRET,
         API_BASE_URL,
         tech_indicator_list,
         turbulence_thresh=30,
         max_stock=1e2,
-        latency=None,
     ):
         # load agent
         if agent == "ppo":
-            from elegantrl.agent import AgentPPO
-            from elegantrl.run import Arguments, init_agent
+            from stable_baselines3 import PPO
 
-            # load agent
-            config = {
-                "state_dim": state_dim,
-                "action_dim": action_dim,
-            }
-            args = Arguments(agent=AgentPPO, env=StockEnvEmpty(config))
-            args.cwd = cwd
-            args.net_dim = net_dim
-            # load agent
             try:
-                agent = init_agent(args, gpu_id=0)
-                self.act = agent.act
-                self.device = agent.device
-            except BaseException:
+                # load agent
+                self.model = PPO.load(cwd)
+                print("Successfully load model", cwd)
+            except:
                 raise ValueError("Fail to load agent!")
-
         else:
             raise ValueError("Agent input is NOT supported yet.")
 
         # connect to Alpaca trading API
         try:
-            self.alpaca = tradeapi.REST(API_KEY, API_SECRET, API_BASE_URL, "v2")
+            self.alpaca = tradeapi.REST(
+                API_KEY, API_SECRET, API_BASE_URL, "v2")
         except:
             raise ValueError(
                 "Fail to connect Alpaca. Please check account info and internet connection."
@@ -93,18 +77,6 @@ class AlpacaPaperTrading_erl:
         self.turbulence_bool = 0
         self.equities = []
 
-    def test_latency(self, test_times=10):
-        total_time = 0
-        for i in range(0, test_times):
-            time0 = time.time()
-            self.get_state()
-            time1 = time.time()
-            temp_time = time1 - time0
-            total_time += temp_time
-        latency = total_time / test_times
-        print("latency for data processing: ", latency)
-        return latency
-
     def run(self):
         orders = self.alpaca.list_orders(status="open")
         for order in orders:
@@ -123,7 +95,8 @@ class AlpacaPaperTrading_erl:
             closingTime = clock.next_close.replace(
                 tzinfo=datetime.timezone.utc
             ).timestamp()
-            currTime = clock.timestamp.replace(tzinfo=datetime.timezone.utc).timestamp()
+            currTime = clock.timestamp.replace(
+                tzinfo=datetime.timezone.utc).timestamp()
             self.timeToClose = closingTime - currTime
 
             if self.timeToClose < (60):
@@ -157,6 +130,10 @@ class AlpacaPaperTrading_erl:
                 last_equity = float(self.alpaca.get_account().last_equity)
                 cur_time = time.time()
                 self.equities.append([cur_time, last_equity])
+                np.save(
+                    "paper_trading_records.npy",
+                    np.asarray(self.equities, dtype=float),
+                )
                 time.sleep(self.time_interval)
 
     def awaitMarketOpen(self):
@@ -166,7 +143,8 @@ class AlpacaPaperTrading_erl:
             openingTime = clock.next_open.replace(
                 tzinfo=datetime.timezone.utc
             ).timestamp()
-            currTime = clock.timestamp.replace(tzinfo=datetime.timezone.utc).timestamp()
+            currTime = clock.timestamp.replace(
+                tzinfo=datetime.timezone.utc).timestamp()
             timeToOpen = int((openingTime - currTime) / 60)
             print(str(timeToOpen) + " minutes til market open.")
             time.sleep(60)
@@ -174,11 +152,7 @@ class AlpacaPaperTrading_erl:
 
     def trade(self):
         state = self.get_state()
-        with torch.no_grad():
-            s_tensor = torch.as_tensor((state,), device=self.device)
-            a_tensor = self.act(s_tensor)
-            action = a_tensor.detach().cpu().numpy()[0]
-
+        action = self.model.predict(state)[0]
         action = (action * self.max_stock).astype(int)
 
         self.stocks_cd += 1
@@ -228,7 +202,8 @@ class AlpacaPaperTrading_erl:
                 qty = abs(int(float(position.qty)))
                 respSO = []
                 tSubmitOrder = threading.Thread(
-                    target=self.submitOrder(qty, position.symbol, orderSide, respSO)
+                    target=self.submitOrder(
+                        qty, position.symbol, orderSide, respSO)
                 )
                 tSubmitOrder.start()
                 tSubmitOrder.join()
@@ -321,29 +296,3 @@ class AlpacaPaperTrading_erl:
             return 1 / (1 + np.exp(-x * np.e)) - 0.5
 
         return sigmoid(ary / thresh) * thresh
-
-
-class StockEnvEmpty(gym.Env):
-    # Empty Env used for loading rllib agent
-    def __init__(self, config):
-        state_dim = config["state_dim"]
-        action_dim = config["action_dim"]
-        self.env_num = 1
-        self.max_step = 10000
-        self.env_name = "StockEnvEmpty"
-        self.state_dim = state_dim
-        self.action_dim = action_dim
-        self.if_discrete = False
-        self.target_return = 9999
-        self.observation_space = gym.spaces.Box(
-            low=-3000, high=3000, shape=(state_dim,), dtype=np.float32
-        )
-        self.action_space = gym.spaces.Box(
-            low=-1, high=1, shape=(action_dim,), dtype=np.float32
-        )
-
-    def reset(self):
-        return
-
-    def step(self, actions):
-        return
