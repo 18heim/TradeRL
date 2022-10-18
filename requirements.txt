@@ -1,0 +1,14 @@
+alpaca-trade-api
+yfinance
+stockstats
+ccxt
+pandas
+exchange-calendars
+trading-calendars
+setuptools
+ipykernel
+flake8
+black
+isort
+torch
+stable-baselines3
