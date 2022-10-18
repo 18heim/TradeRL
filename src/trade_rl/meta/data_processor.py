@@ -22,17 +22,17 @@ class DataProcessor:
         self.dataframe = pd.DataFrame()
 
         if self.data_source == "alpaca":
-            from meta.data_processors.alpaca import Alpaca
+            from trade_rl.meta.data_processors.alpaca import Alpaca
 
             processor_dict = {self.data_source: Alpaca}
 
-        elif self.data_source == "alphavantage":
-            from trade_rl.meta.data_processors.alphavantage import Alphavantage
+        elif self.data_source == "alpacacrypto":
+            from trade_rl.meta.data_processors.alpaca_crypto import AlpacaCrypto
 
-            processor_dict = {self.data_source: Alphavantage}
+            processor_dict = {self.data_source: AlpacaCrypto}
 
         elif self.data_source == "binance":
-            from meta.data_processors.binance import Binance
+            from trade_rl.meta.data_processors.binance import Binance
 
             processor_dict = {self.data_source: Binance}
 
@@ -42,7 +42,7 @@ class DataProcessor:
             processor_dict = {self.data_source: Ccxt}
 
         elif self.data_source == "yahoofinance":
-            from meta.data_processors.yahoofinance import Yahoofinance
+            from trade_rl.meta.data_processors.yahoofinance import Yahoofinance
 
             processor_dict = {self.data_source: Yahoofinance}
 
@@ -69,11 +69,11 @@ class DataProcessor:
         self.dataframe = self.processor.dataframe
 
     def add_technical_indicator(
-        self, tech_indicator_list: List[str], select_stockstats_talib: int = 0
+        self, tech_indicator_list: List[str],
     ):
         self.tech_indicator_list = tech_indicator_list
         self.processor.add_technical_indicator(
-            tech_indicator_list, select_stockstats_talib
+            tech_indicator_list
         )
         self.dataframe = self.processor.dataframe
 
@@ -153,7 +153,8 @@ class DataProcessor:
                         protocol=pickle.HIGHEST_PROTOCOL,
                     )
 
-        self.add_technical_indicator(technical_indicator_list, select_stockstats_talib)
+        self.add_technical_indicator(
+            technical_indicator_list)
         if if_vix:
             self.add_vix()
         price_array, tech_array, turbulence_array = self.df_to_array(if_vix)

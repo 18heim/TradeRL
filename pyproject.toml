@@ -12,18 +12,25 @@ alpaca-trade-api = "^2.3.0"
 yfinance = "^0.1.77"
 stockstats = "^0.4.1"
 ccxt = "^2.0.6"
-elegantrl = "^0.3.3"
 pandas = "^1.5.0"
 exchange-calendars = "^4.2.3"
 trading-calendars = "^2.1.1"
-
-[tool.poetry.dev-dependencies]
-pytest = "^5.2"
+setuptools = "^65.5.0"
 ipykernel = "^6.16.0"
-
-[tool.poetry.group.dev.dependencies]
-autopep8 = "^1.7.0"
+flake8 = "^5.0.4"
+black = "^22.10.0"
+isort = "^5.10.1"
+torch = "^1.12.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+skip = [".gitignore", ".dockerignore"]
+extend_skip = [".md", ".json"]
+include_trailing_comma = true
+known_first_party = "trade_rl"
+line_length = 88
+multi_line_output = 3
+src_paths = ["src", "tests"]

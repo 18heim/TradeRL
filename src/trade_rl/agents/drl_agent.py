@@ -1,28 +1,58 @@
-from __future__ import annotations
+# common library
+import time
 
-import torch
-from elegantrl.agents import AgentPPO
+import numpy as np
+import pandas as pd
+from stable_baselines3 import A2C
+from stable_baselines3 import DDPG
+from stable_baselines3 import PPO
+from stable_baselines3 import SAC
+from stable_baselines3 import TD3
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.noise import NormalActionNoise
+from stable_baselines3.common.noise import OrnsteinUhlenbeckActionNoise
+from stable_baselines3.common.vec_env import DummyVecEnv
 
-from trade_rl.agents.config import Config
-from trade_rl.agents.utils import train_agent
+from meta import config
+from meta.env_stock_trading.env_stock_trading import StockTradingEnv
 
-MODELS = {"ppo": AgentPPO}
-OFF_POLICY_MODELS = ["ddpg", "td3", "sac"]
-ON_POLICY_MODELS = ["ppo"]
-# MODEL_KWARGS = {x: config.__dict__[f"{x.upper()}_PARAMS"] for x in MODELS.keys()}
-#
-# NOISE = {
-#     "normal": NormalActionNoise,
-#     "ornstein_uhlenbeck": OrnsteinUhlenbeckActionNoise,
-# }
+# RL models from stable-baselines
+
+
+MODELS = {"a2c": A2C, "ddpg": DDPG, "td3": TD3, "sac": SAC, "ppo": PPO}
+
+MODEL_KWARGS = {x: config.__dict__[f"{x.upper()}_PARAMS"] for x in MODELS.keys()}
+
+NOISE = {
+    "normal": NormalActionNoise,
+    "ornstein_uhlenbeck": OrnsteinUhlenbeckActionNoise,
+}
+
+
+class TensorboardCallback(BaseCallback):
+    """
+    Custom callback for plotting additional values in tensorboard.
+    """
+
+    def __init__(self, verbose=0):
+        super(TensorboardCallback, self).__init__(verbose)
+
+    def _on_step(self) -> bool:
+        try:
+            self.logger.record(key="train/reward", value=self.locals["rewards"][0])
+        except BaseException:
+            self.logger.record(key="train/reward", value=self.locals["reward"][0])
+        return True
 
 
 class DRLAgent:
-    """Implementations of DRL algorithms
+    """Provides implementations for DRL algorithms
+
     Attributes
     ----------
         env: gym environment class
             user-defined class
+
     Methods
     -------
         get_model()
@@ -34,99 +64,98 @@ class DRLAgent:
             make a prediction in a test dataset and get results
     """
 
-    def __init__(self, env, price_array, tech_array, turbulence_array):
+    def __init__(self, env):
         self.env = env
-        self.price_array = price_array
-        self.tech_array = tech_array
-        self.turbulence_array = turbulence_array
 
-    def get_model(self, model_name, model_kwargs):
-        env_config = {
-            "price_array": self.price_array,
-            "tech_array": self.tech_array,
-            "turbulence_array": self.turbulence_array,
-            "if_train": True,
-        }
-        environment = self.env(config=env_config)
-        env_args = {'config': env_config,
-                    'env_name': environment.env_name,
-                    'state_dim': environment.state_dim,
-                    'action_dim': environment.action_dim,
-                    'if_discrete': False}
-        agent = MODELS[model_name]
+    def get_model(
+        self,
+        model_name,
+        policy="MlpPolicy",
+        policy_kwargs=None,
+        model_kwargs=None,
+        verbose=1,
+        seed=None,
+    ):
         if model_name not in MODELS:
             raise NotImplementedError("NotImplementedError")
-        model = Config(agent_class=agent,
-                       env_class=self.env, env_args=env_args)
-        model.if_off_policy = model_name in OFF_POLICY_MODELS
-        if model_kwargs is not None:
-            try:
-                model.learning_rate = model_kwargs["learning_rate"]
-                model.batch_size = model_kwargs["batch_size"]
-                model.gamma = model_kwargs["gamma"]
-                model.seed = model_kwargs["seed"]
-                model.net_dims = model_kwargs["net_dimension"]
-                model.target_step = model_kwargs["target_step"]
-                model.eval_gap = model_kwargs["eval_gap"]
-                model.eval_times = model_kwargs["eval_times"]
-            except BaseException:
-                raise ValueError(
-                    "Fail to read arguments, please check 'model_kwargs' input."
-                )
+
+        if model_kwargs is None:
+            model_kwargs = MODEL_KWARGS[model_name]
+
+        if "action_noise" in model_kwargs:
+            n_actions = self.env.action_space.shape[-1]
+            model_kwargs["action_noise"] = NOISE[model_kwargs["action_noise"]](
+                mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
+            )
+        print(model_kwargs)
+        model = MODELS[model_name](
+            policy=policy,
+            env=self.env,
+            tensorboard_log=f"{config.TENSORBOARD_LOG_DIR}/{model_name}",
+            verbose=verbose,
+            policy_kwargs=policy_kwargs,
+            seed=seed,
+            **model_kwargs,
+        )
         return model
 
-    def train_model(self, model, cwd, total_timesteps=5000):
-        model.cwd = cwd
-        model.break_step = total_timesteps
-        train_agent(model)
+    def train_model(self, model, tb_log_name, total_timesteps=5000):
+        model = model.learn(
+            total_timesteps=total_timesteps,
+            tb_log_name=tb_log_name,
+            callback=TensorboardCallback(),
+        )
+        return model
 
     @staticmethod
-    def DRL_prediction(model_name, cwd, net_dimension, environment):
+    def DRL_prediction(model, environment):
+        test_env, test_obs = environment.get_sb_env()
+        """make a prediction"""
+        account_memory = []
+        actions_memory = []
+        test_env.reset()
+        for i in range(len(environment.df.index.unique())):
+            action, _states = model.predict(test_obs)
+            # account_memory = test_env.env_method(method_name="save_asset_memory")
+            # actions_memory = test_env.env_method(method_name="save_action_memory")
+            test_obs, rewards, dones, info = test_env.step(action)
+            if i == (len(environment.df.index.unique()) - 2):
+                account_memory = test_env.env_method(method_name="save_asset_memory")
+                actions_memory = test_env.env_method(method_name="save_action_memory")
+            if dones[0]:
+                print("hit end!")
+                break
+        return account_memory[0], actions_memory[0]
+
+    @staticmethod
+    def DRL_prediction_load_from_file(model_name, environment, cwd):
         if model_name not in MODELS:
             raise NotImplementedError("NotImplementedError")
-        agent_class = MODELS[model_name]
-        environment.env_num = 1
-        agent = agent_class(
-            net_dimension, environment.state_dim, environment.action_dim)
-        actor = agent.act
-        # load agent
         try:
-            cwd = cwd + '/actor.pth'
-            print(f"| load actor from: {cwd}")
-            actor.load_state_dict(torch.load(
-                cwd, map_location=lambda storage, loc: storage))
-            act = actor
-            device = agent.device
+            # load agent
+            model = MODELS[model_name].load(cwd)
+            print("Successfully load model", cwd)
         except BaseException:
             raise ValueError("Fail to load agent!")
 
         # test on the testing env
-        _torch = torch
         state = environment.reset()
-        episode_returns = []  # the cumulative_return / initial_account
-        episode_total_assets = [environment.initial_total_asset]
-        with _torch.no_grad():
-            for i in range(environment.max_step):
-                s_tensor = _torch.as_tensor((state,), device=device)
-                a_tensor = act(s_tensor)  # action_tanh = act.forward()
-                action = (
-                    a_tensor.detach().cpu().numpy()[0]
-                )  # not need detach(), because with torch.no_grad() outside
-                state, reward, done, _ = environment.step(action)
+        episode_returns = list()  # the cumulative_return / initial_account
+        episode_total_assets = list()
+        episode_total_assets.append(environment.initial_total_asset)
+        done = False
+        while not done:
+            action = model.predict(state)[0]
+            state, reward, done, _ = environment.step(action)
 
-                total_asset = (
-                    environment.cash
-                    + (
-                        environment.price_array[environment.time] *
-                        environment.stocks
-                    ).sum()
-                )
-                episode_total_assets.append(total_asset)
-                episode_return = total_asset / environment.initial_total_asset
-                episode_returns.append(episode_return)
-                if done:
-                    break
-        print("Test Finished!")
-        # return episode total_assets on testing data
+            total_asset = (
+                environment.cash
+                + (environment.price_array[environment.time] * environment.stocks).sum()
+            )
+            episode_total_assets.append(total_asset)
+            episode_return = total_asset / environment.initial_total_asset
+            episode_returns.append(episode_return)
+
         print("episode_return", episode_return)
+        print("Test Finished!")
         return episode_total_assets
