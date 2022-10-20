@@ -26,7 +26,7 @@ TICKER_LIST = [
 PPO_PARAMS = {"n_steps": 2048, "ent_coef": 0.01,
               "learning_rate": 0.00025, "batch_size": 128}
 
-time_interval = "1Min"
+time_interval = "1D"
 
 TRAIN_START_DATE = "2020-10-01"
 TRAIN_END_DATE = "2021-11-08"
@@ -69,7 +69,7 @@ train(
     time_interval=time_interval,
     technical_indicator_list=INDICATORS,
     drl_lib="stable_baselines3",
-    env_train=env,
+    env_class=env,
     model_name="ppo",
     cwd="./test_ppo",
     agent_params=PPO_PARAMS,
@@ -79,20 +79,20 @@ train(
 
 duration_train = round((time.time() - start_time), 2)
 
-start_time = time.time()
+# start_time = time.time()
 
-account_value_erl = test(
-    start_date=TEST_START_DATE,
-    end_date=TEST_END_DATE,
-    ticker_list=TICKER_LIST,
-    data_source="binance",
-    time_interval=time_interval,
-    technical_indicator_list=INDICATORS,
-    drl_lib="stable_baseline3",
-    env=env,
-    model_name="ppo",
-    current_working_dir="./test_ppo",
-    if_vix=False,
-)
+# account_value_erl = test(
+#     start_date=TEST_START_DATE,
+#     end_date=TEST_END_DATE,
+#     ticker_list=TICKER_LIST,
+#     data_source="binance",
+#     time_interval=time_interval,
+#     technical_indicator_list=INDICATORS,
+#     drl_lib="stable_baseline3",
+#     env=env,
+#     model_name="ppo",
+#     current_working_dir="./test_ppo",
+#     if_vix=False,
+# )
 
-duration_test = round((time.time() - start_time), 2)
+# duration_test = round((time.time() - start_time), 2)

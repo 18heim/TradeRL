@@ -176,22 +176,19 @@ class AlpacaPaperTradingMultiCrypto:
         print("Trade finished")
 
     def get_state(self):
-        alpaca = AlpacaCrypto(data_source="alpacacrypto",
-                              API=self.alpaca, time_interval=self.time_interval)
+        alpaca_proc = AlpacaCrypto(data_source="alpacacrypto",
+                                   API=self.alpaca, time_interval=self.time_interval)
 
-        price_array, tech_array, _ = alpaca.fetch_latest_data(
+        cur_price, cur_tech, _ = alpaca_proc.fetch_latest_data(
             ticker_list=self.stockUniverse,
             time_interval=self.time_interval,
             tech_indicator_list=self.tech_indicator_list,
         )
 
         print("fetching latest candles..")
-
-        self.price_array = price_array
-        self.tech_array = tech_array
-
         positions = self.alpaca.list_positions()
         stocks = [0] * len(self.stockUniverse)
+        self.price = cur_price
 
         for position in positions:
             ind = self.stockUniverse.index(position.symbol)
@@ -202,15 +199,10 @@ class AlpacaPaperTradingMultiCrypto:
         self.cash = cash
         self.stocks = stocks
 
-        # latest price and tech arrays
-        self.price = price_array[-1]
-
         # Stack cash and stocks
         state = np.hstack((self.cash * 2**-18, self.stocks * 2**-3))
-        for i in range(self.lookback):
-            tech_i = self.tech_array[-1 - i]
-            normalized_tech_i = tech_i * 2**-15
-            state = np.hstack((state, normalized_tech_i)).astype(np.float32)
+        normalized_tech = cur_tech * 2**-15
+        state = np.hstack((state, normalized_tech)).astype(np.float32)
 
         print("\n" + "STATE:")
         print(state)
@@ -220,7 +212,7 @@ class AlpacaPaperTradingMultiCrypto:
     def submitOrder(self, qty, stock, side, resp):
         if qty > 0:
             try:
-                self.alpaca.submit_order(stock, qty, side, "market", "day")
+                self.alpaca.submit_order(stock, qty, side, "market", "gtc")
                 print(
                     "Market order of | "
                     + str(qty)
