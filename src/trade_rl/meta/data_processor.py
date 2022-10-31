@@ -1,25 +1,14 @@
 import os
 import pickle
-from typing import List, Optional, Dict, Literal
+from typing import Dict, List, Literal, Optional
 
 import numpy as np
 import pandas as pd
 
-import pydantic
-import alpaca_trade_api as tradeapi
-
-
 from trade_rl.meta.data_processors.alpaca_crypto import APIConfig
 
 
-class DataProcessor(pydantic.BaseModel):
-    data_source: Literal["alpaca", "alpacacrypto",
-                         "binance", "ccxt", "yahoofinance"]
-    start_date: str
-    end_date: str
-    time_interval: str
-    api_config: Optional[APIConfig]
-
+class DataProcessor:
     def __init__(
         self,
         data_source: str,
@@ -62,15 +51,14 @@ class DataProcessor(pydantic.BaseModel):
         else:
             print(f"{self.data_source} is NOT supported yet.")
 
-        try:
-            self.processor = processor_dict.get(self.data_source)(
-                start_date, end_date, time_interval, api_config
-            )
-            print(f"{self.data_source} successfully connected")
-        except:
-            raise ValueError(
-                f"Please input correct account info for {self.data_source}!"
-            )
+        self.processor = processor_dict.get(self.data_source)(self.data_source,
+                                                              start_date, end_date, time_interval
+                                                              )
+        print(f"{self.data_source} successfully connected")
+        # except:
+        #     raise ValueError(
+        #         f"Please input correct account info for {self.data_source}!"
+        #     )
 
     def download_data(self, ticker_list):
         self.processor.download_data(ticker_list=ticker_list)

@@ -27,6 +27,11 @@ INDICATORS = [
     "close_60_sma",
 ]
 
+CASH_SCALE = 2**-18
+STOCK_QTY_SCALE = 2**-3
+TECH_SCALE = 2**-15
+REWARD_SCALE = 2**-16
+
 
 # Model Parameters
 A2C_PARAMS = {"n_steps": 5, "ent_coef": 0.01, "learning_rate": 0.0007}

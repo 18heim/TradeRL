@@ -28,7 +28,7 @@ class AlpacaCrypto(_Base):
         if self.api_config.API is None:
             try:
                 self.api = tradeapi.REST(**api_config,
-                                         "v2",
+                                         api_version="v2",
                                          )
             except BaseException:
                 raise ValueError("Wrong Account Info!")

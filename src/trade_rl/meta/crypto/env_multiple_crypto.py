@@ -3,12 +3,20 @@ import math
 import numpy as np
 
 import gym
+from trade_rl.meta import config
+
+# TODO:
+# je veux pouvoir facilement configurer le max de stock qu'on puisse acheter.
+# pourquoi est-ce qu'on met pas des montants en € sur l'achat d'action plutôt que
+# de dire j'achète 0.3 bitcoin et de normalizer donc des actions qui ne sont pas du tout sur
+# la même échelle et d'utiliser un mecanisme chelou pour les standardiser ?
+# En plus ça empêche d'avoir un contrôle et de faire des actions avec un faible Apport.
 
 
 class CryptoEnv(gym.Env):  # custom env
     def __init__(
         self,
-        config,
+        data_config,
         lookback=1,
         initial_capital=1e6,
         buy_cost_pct=1e-3,
@@ -22,8 +30,8 @@ class CryptoEnv(gym.Env):  # custom env
         self.sell_cost_pct = sell_cost_pct
         self.max_stock = 1
         self.gamma = gamma
-        self.price_array = config["price_array"]
-        self.tech_array = config["tech_array"]
+        self.price_array = data_config["price_array"]
+        self.tech_array = data_config["tech_array"]
         self._generate_action_normalizer()
         self.crypto_num = self.price_array.shape[1]
         self.max_step = self.price_array.shape[0] - lookback - 1
@@ -42,9 +50,10 @@ class CryptoEnv(gym.Env):  # custom env
 
         """env information"""
         self.env_name = "MulticryptoEnv"
+        # Cash + n_stocks_held + (price, tech_array) * n_stocks  * lookback
         self.state_dim = (
-            1 + (self.price_array.shape[1] +
-                 self.tech_array.shape[1]) * lookback
+            1 + self.price_array.shape[1] +
+            (self.price_array.shape[1] + self.tech_array.shape[1]) * lookback
         )
         self.action_dim = self.price_array.shape[1]
         self.if_discrete = False
@@ -107,11 +116,14 @@ class CryptoEnv(gym.Env):  # custom env
         return state, reward, done, dict()
 
     def get_state(self):
-        state = np.hstack((self.cash * 2**-18, self.stocks * 2**-3))
+        state = np.hstack((self.cash * config.CASH_SCALE,
+                          self.stocks * config.STOCK_QTY_SCALE))
         for i in range(self.lookback):
             tech_i = self.tech_array[self.time - i]
-            normalized_tech_i = tech_i * 2**-15
-            state = np.hstack((state, normalized_tech_i)).astype(np.float32)
+            price_i = self.price_array[self.time - i] * config.CASH_SCALE
+            normalized_tech_i = tech_i * config.TECH_SCALE
+            state = np.hstack(
+                (state, price_i, normalized_tech_i)).astype(np.float32)
         return state
 
     def close(self):

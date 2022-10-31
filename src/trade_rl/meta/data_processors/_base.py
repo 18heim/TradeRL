@@ -1,38 +1,35 @@
-import copy
-import os
-import urllib
-import zipfile
-from pathlib import Path
-from typing import List, Optional, Any, Literal
-import re
-import datetime as dt
 
+import datetime as dt
+import re
+from typing import List, Literal, Optional, Any, Dict
+
+import alpaca_trade_api as tradeapi
 import numpy as np
 import pandas as pd
-import stockstats
 import pydantic
-import alpaca_trade_api as tradeapi
+import stockstats
 
-from trade_rl.meta.config import BINANCE_BASE_URL
-from trade_rl.meta.config import TIME_ZONE_BERLIN
-from trade_rl.meta.config import TIME_ZONE_JAKARTA
-from trade_rl.meta.config import TIME_ZONE_PARIS
-from trade_rl.meta.config import TIME_ZONE_SELFDEFINED
-from trade_rl.meta.config import TIME_ZONE_SHANGHAI
-from trade_rl.meta.config import TIME_ZONE_USEASTERN
-from trade_rl.meta.config import USE_TIME_ZONE_SELFDEFINED
-from trade_rl.meta.config_tickers import CAC_40_TICKER
-from trade_rl.meta.config_tickers import CSI_300_TICKER
-from trade_rl.meta.config_tickers import DAX_30_TICKER
-from trade_rl.meta.config_tickers import DOW_30_TICKER
-from trade_rl.meta.config_tickers import HSI_50_TICKER
-from trade_rl.meta.config_tickers import LQ45_TICKER
-from trade_rl.meta.config_tickers import MDAX_50_TICKER
-from trade_rl.meta.config_tickers import NAS_100_TICKER
-from trade_rl.meta.config_tickers import SDAX_50_TICKER
-from trade_rl.meta.config_tickers import SP_500_TICKER
-from trade_rl.meta.config_tickers import SSE_50_TICKER
-from trade_rl.meta.config_tickers import TECDAX_TICKER
+from trade_rl.meta.config import (
+    TIME_ZONE_BERLIN,
+    TIME_ZONE_JAKARTA,
+    TIME_ZONE_PARIS,
+    TIME_ZONE_SHANGHAI,
+    TIME_ZONE_USEASTERN,
+)
+from trade_rl.meta.config_tickers import (
+    CAC_40_TICKER,
+    CSI_300_TICKER,
+    DAX_30_TICKER,
+    DOW_30_TICKER,
+    HSI_50_TICKER,
+    LQ45_TICKER,
+    MDAX_50_TICKER,
+    NAS_100_TICKER,
+    SDAX_50_TICKER,
+    SP_500_TICKER,
+    SSE_50_TICKER,
+    TECDAX_TICKER,
+)
 
 
 class TimeIntervalError(Exception):
@@ -48,7 +45,7 @@ class TimeIntervalError(Exception):
 
 
 class APIConfig(pydantic.BaseModel):
-    API: Optional[tradeapi.REST]
+    API: Optional[Any]
     API_KEY:  Optional[str]
     API_SECRET: Optional[str]
     API_BASE_URL: Optional[pydantic.HttpUrl]
@@ -62,15 +59,15 @@ class APIConfig(pydantic.BaseModel):
         return values
 
 
-class _Base(pydantic.BaseModel):
+class _Base(pydantic.BaseModel,  extra=pydantic.Extra.allow):
     data_source: Literal["alpaca", "alpacacrypto",
-                         "binance", "ccxt", "yahoofinance"]
+                         "ccxt", "binance", "yahoofinance"]
     start_date: dt.datetime
     end_date: dt.datetime
     time_interval: str
     api_config: Optional[APIConfig]
 
-    @pydantic.validator(["start_date", "end_date"], pre=True)
+    @pydantic.validator("start_date", "end_date", pre=True)
     @classmethod
     def parse_date(cls, value):
         """Parse start_date and end_date."""
@@ -80,9 +77,9 @@ class _Base(pydantic.BaseModel):
     @classmethod
     def parse_api_config(cls, value):
         """Parse API config dictionnary."""
-        return APIConfig(**value)
+        return APIConfig(**value) if value else None
 
-    @pydantic.validator("time_interval", pre=True)
+    @pydantic.validator("time_interval")
     @classmethod
     def check_time_interval(cls, value, values):
         if "alpaca" in values["data_source"]:
@@ -113,9 +110,11 @@ class _Base(pydantic.BaseModel):
         time_interval: str,
         api_config: Optional[APIConfig] = None,
     ):
-        self.data_source: str = data_source
-        self.time_interval: str = time_interval  # standard time_interval
-        self.time_zone: str = ""
+        super().__init__(data_source=data_source, start_date=start_date,
+                         end_date=end_date, time_interval=time_interval, api_config=api_config)
+        self.data_source = data_source
+        self.time_interval = time_interval  # standard time_interval
+        self.time_zone = ""
         self.dataframe: pd.DataFrame = pd.DataFrame()
         self.dictnumpy: dict = (
             {}
@@ -134,18 +133,6 @@ class _Base(pydantic.BaseModel):
             self.dataframe.rename(columns={"datetime": "time"}, inplace=True)
         if self.data_source == "ccxt":
             self.dataframe.rename(columns={"index": "time"}, inplace=True)
-
-        if self.data_source == "ricequant":
-            """RiceQuant data is already cleaned, we only need to transform data format here.
-            No need for filling NaN data"""
-            self.dataframe.rename(
-                columns={"order_book_id": "tic"}, inplace=True)
-            # raw df uses multi-index (tic,time), reset it to single index (time)
-            self.dataframe.reset_index(level=[0, 1], inplace=True)
-            # check if there is NaN values
-            assert not self.dataframe.isnull().values.any()
-        elif self.data_source == "baostock":
-            self.dataframe.rename(columns={"code": "tic"}, inplace=True)
 
         self.dataframe.dropna(inplace=True)
         # adjusted_close: adjusted close price
@@ -169,9 +156,6 @@ class _Base(pydantic.BaseModel):
         if self.data_source in [
             "binance",
             "ccxt",
-            "quantconnect",
-            "ricequant",
-            "tushare",
         ]:
             print(
                 f"Calculate get_trading_days not supported for {self.data_source} yet."
@@ -209,26 +193,15 @@ class _Base(pydantic.BaseModel):
         :param data: (df) pandas dataframe
         :return: (df) pandas dataframe
         """
-        # df = data.copy()
-        # turbulence_index = self.calculate_turbulence(df)
-        # df = df.merge(turbulence_index, on="time")
-        # df = df.sort_values(["time", "tic"]).reset_index(drop=True)
-        # return df
         if self.data_source in [
             "binance",
             "ccxt",
-            "iexcloud",
-            "joinquant",
-            "quantconnect",
         ]:
             print(
                 f"Turbulence not supported for {self.data_source} yet. Return original DataFrame."
             )
         if self.data_source in [
             "alpaca",
-            "ricequant",
-            "tushare",
-            "wrds",
             "yahoofinance",
         ]:
             turbulence_index = self.calculate_turbulence()
@@ -294,11 +267,6 @@ class _Base(pydantic.BaseModel):
         if self.data_source in [
             "binance",
             "ccxt",
-            "iexcloud",
-            "joinquant",
-            "quantconnect",
-            "ricequant",
-            "tushare",
         ]:
             print(
                 f"VIX is not applicable for {self.data_source}. Return original DataFrame"
@@ -443,18 +411,3 @@ def calc_time_zone(
     else:
         raise ValueError("Time zone is wrong.")
     return time_zone
-
-
-def check_date(d: str) -> bool:
-    assert (
-        len(d) == 10
-    ), "Please check the length of date and use the correct date like 2020-01-01."
-    indices = [0, 1, 2, 3, 5, 6, 8, 9]
-    correct = True
-    for i in indices:
-        if not d[i].isdigit():
-            correct = False
-            break
-    if not correct:
-        raise ValueError("Please use the correct date like 2020-01-01.")
-    return correct
