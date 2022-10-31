@@ -3,46 +3,37 @@ from typing import List, Optional
 import alpaca_trade_api as tradeapi
 import numpy as np
 import pandas as pd
-import pytz
+import pydantic
 
-try:
-    import exchange_calendars as tc
-except:
-    print(
-        "Cannot import exchange_calendars.",
-        "If you are using python>=3.7, please install it.",
-    )
-    import trading_calendars as tc
-
-    print("Use trading_calendars instead for alpaca processor.")
 from trade_rl.meta.config import TIME_ZONE_SELFDEFINED
 # from basic_processor import _Base
-from trade_rl.meta.data_processors._base import _Base, calc_time_zone, add_tech_indicator, df_to_array
+from trade_rl.meta.data_processors._base import (
+    APIConfig,
+    _Base,
+    add_tech_indicator,
+    calc_time_zone,
+    df_to_array,
+)
 
 
 class AlpacaCrypto(_Base):
     def __init__(
         self,
-        data_source: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        time_interval: Optional[str] = None,
-        API: Optional[tradeapi.REST] = None,
-        ** kwargs
+        start_date: str,
+        end_date: str,
+        time_interval: str,
+        api_config: APIConfig,
     ):
-        super().__init__(data_source, start_date, end_date, time_interval, **kwargs)
-        if API is None:
+        super().__init__("alpacacrypto", start_date, end_date, time_interval, api_config)
+        if self.api_config.API is None:
             try:
-                self.api = tradeapi.REST(
-                    kwargs["API_KEY"],
-                    kwargs["API_SECRET"],
-                    kwargs["API_BASE_URL"],
-                    "v2",
-                )
+                self.api = tradeapi.REST(**api_config,
+                                         "v2",
+                                         )
             except BaseException:
                 raise ValueError("Wrong Account Info!")
         else:
-            self.api = API
+            self.api = self.api_config.API
 
     def download_data(
         self, ticker_list: List[str]

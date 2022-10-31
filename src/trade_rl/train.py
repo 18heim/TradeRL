@@ -1,26 +1,32 @@
-from trade_rl.meta.data_processor import DataProcessor
-from trade_rl.agents.drl_agent import DRLAgent
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 
+from trade_rl.agents.drl_agent import DRLAgent
+from trade_rl.meta.data_processor import DataProcessor
 
-def train(drl_lib, env_class, model_name, **kwargs):
+from omegaconf import DictConfig
+
+
+def train(drl_lib: str,
+          data_config: DictConfig,
+          cwd: Path,
+          env_class: Any,
+          model_params: DictConfig):
     # read parameters and load agents
-    cwd = kwargs.get("cwd", "./" + str(model_name))  # cwd: current_working_dir
-    DP = DataProcessor(**kwargs)
-    price_array, tech_array, turbulence_array = DP.run(kwargs["ticker_list"],
-                                                        kwargs["technical_indicator_list"], 
-                                                        kwargs["if_vix"], cache=True)
+    cwd = cwd / model_params.model_name
+    DP = DataProcessor(**data_config)
+    data_config['price_array'], data_config['tech_array'], data_config['turbulence_array'] = DP.run(data_config["ticker_list"],
+                                                                                                    data_config["technical_indicator_list"],
+                                                                                                    data_config["if_vix"], cache=True)
 
-    data_config = {'price_array': price_array,
-                   'tech_array': tech_array,
-                   'turbulence_array': turbulence_array}
-
-    #build environment using processed data
+    # build environment using processed data
     env_instance = env_class(config=data_config)
 
     if drl_lib == "stable_baselines3":
-        total_timesteps = kwargs.get("total_timesteps", 1e6)
-        agent_params = kwargs.get("agent_params")
+        total_timesteps = model_params.get("total_timesteps", 1e6)
+        agent_params = model_params.get("agent_params")
 
         agent = DRLAgent(env=env_instance)
         model = agent.get_model(model_name, model_kwargs=agent_params)

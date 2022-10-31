@@ -2,14 +2,16 @@ import copy
 import os
 import urllib
 import zipfile
-from datetime import *
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Any, Literal
 import re
+import datetime as dt
 
 import numpy as np
 import pandas as pd
 import stockstats
+import pydantic
+import alpaca_trade_api as tradeapi
 
 from trade_rl.meta.config import BINANCE_BASE_URL
 from trade_rl.meta.config import TIME_ZONE_BERLIN
@@ -33,19 +35,86 @@ from trade_rl.meta.config_tickers import SSE_50_TICKER
 from trade_rl.meta.config_tickers import TECDAX_TICKER
 
 
-class _Base:
+class TimeIntervalError(Exception):
+    """Custom error raised when time interval isn't correct."""
+
+    def __init__(self, time_interval, data_source, time_units):
+        self.time_interval = time_interval
+        self.data_source = data_source
+        self.time_units = time_units
+        self.message = f"Error time interval is {time_interval} whereas {data_source} \
+                allows only {time_units}"
+        super().__init__(self.message)
+
+
+class APIConfig(pydantic.BaseModel):
+    API: Optional[tradeapi.REST]
+    API_KEY:  Optional[str]
+    API_SECRET: Optional[str]
+    API_BASE_URL: Optional[pydantic.HttpUrl]
+
+    @pydantic.root_validator(pre=True)
+    @classmethod
+    def check_api_or_key(cls, values):
+        """Make sure we have either the secrets or the API."""
+        if "API" not in values and all(values != ["API_KEY", "API_SECRET", "API_BASE_URL"]):
+            raise KeyError("Missing APIConfig keys")
+        return values
+
+
+class _Base(pydantic.BaseModel):
+    data_source: Literal["alpaca", "alpacacrypto",
+                         "binance", "ccxt", "yahoofinance"]
+    start_date: dt.datetime
+    end_date: dt.datetime
+    time_interval: str
+    api_config: Optional[APIConfig]
+
+    @pydantic.validator(["start_date", "end_date"], pre=True)
+    @classmethod
+    def parse_date(cls, value):
+        """Parse start_date and end_date."""
+        return dt.datetime.fromisoformat(value)
+
+    @pydantic.validator("api_config", pre=True)
+    @classmethod
+    def parse_api_config(cls, value):
+        """Parse API config dictionnary."""
+        return APIConfig(**value)
+
+    @pydantic.validator("time_interval", pre=True)
+    @classmethod
+    def check_time_interval(cls, value, values):
+        if "alpaca" in values["data_source"]:
+            time_units = ["Min", "Hour", "Day", "Month"]
+            unit = filter(lambda x: x.isalpha(), value)
+            if not any([unit in allowed_unit for allowed_unit in time_units]):
+                raise TimeIntervalError(
+                    value, value["data_source"], time_units)
+        if values["data_source"] == "binance":
+            time_intervals = ["1m", "3m", "5m", "15m", "30m", "1h", "2h",
+                              "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"]
+            if not value in time_intervals:
+                raise TimeIntervalError(
+                    value, value["data_source"], time_intervals)
+        if values["data_source"] == "yahoofinance":
+            time_intervals = ["1m", "2m", "5m", "15m", "30m",
+                              "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"]
+            if not value in time_intervals:
+                raise TimeIntervalError(
+                    value, value["data_source"], time_intervals)
+        return value
+
     def __init__(
         self,
         data_source: str,
         start_date: str,
         end_date: str,
         time_interval: str,
-        **kwargs,
+        api_config: Optional[APIConfig] = None,
     ):
         self.data_source: str = data_source
         self.time_interval: str = time_interval  # standard time_interval
-        # transferred_time_interval will be supported in the future.
-        # self.nonstandard_time_interval: str = self.calc_nonstandard_time_interval()  # transferred time_interval of this processor
         self.time_zone: str = ""
         self.dataframe: pd.DataFrame = pd.DataFrame()
         self.dictnumpy: dict = (
@@ -53,6 +122,7 @@ class _Base:
         )  # e.g., self.dictnumpy["open"] = np.array([1, 2, 3]), self.dictnumpy["close"] = np.array([1, 2, 3])
         self.start_date = start_date
         self.end_date = end_date
+        self.api_config = api_config
 
     def download_data(self, ticker_list: List[str]):
         pass
@@ -254,134 +324,6 @@ class _Base:
 
     def df_to_array(self, tech_indicator_list: List[str], if_vix: bool):
         return df_to_array(self.dataframe, tech_indicator_list, if_vix)
-
-    # standard_time_interval  s: second, m: minute, h: hour, d: day, w: week, M: month, q: quarter, y: year
-    # output time_interval of the processor
-    def calc_nonstandard_time_interval(self) -> str:
-        if self.data_source == "alpaca" or self.data_source == "alpacacrypto":
-            time_intervals = ["5Min", "5Min", "1D"]
-        elif self.data_source == "baostock":
-            # nonstandard_time_interval: 默认为d，日k线；d=日k线、w=周、m=月、5=5分钟、15=15分钟、30=30分钟、60=60分钟k线数据，不区分大小写；指数没有分钟线数据；周线每周最后一个交易日才可以获取，月线每月最后一个交易日才可以获取。
-            pass
-            time_intervals = ["5m", "15m", "30m", "60m", "1d", "1w", "1M"]
-            assert self.time_interval in time_intervals, (
-                "This time interval is not supported. Supported time intervals: "
-                + ",".join(time_intervals)
-            )
-            if (
-                "d" in self.time_interval
-                or "w" in self.time_interval
-                or "M" in self.time_interval
-            ):
-                return self.time_interval[-1:].lower()
-            elif "m" in self.time_interval:
-                return self.time_interval[:-1]
-        elif self.data_source == "binance":
-            # nonstandard_time_interval: 1m,3m,5m,15m,30m,1h,2h,4h,6h,8h,12h,1d,3d,1w,1M
-            time_intervals = [
-                "1m",
-                "3m",
-                "5m",
-                "15m",
-                "30m",
-                "1h",
-                "2h",
-                "4h",
-                "6h",
-                "8h",
-                "12h",
-                "1d",
-                "3d",
-                "1w",
-                "1M",
-            ]
-            assert self.time_interval in time_intervals, (
-                "This time interval is not supported. Supported time intervals: "
-                + ",".join(time_intervals)
-            )
-            return self.time_interval
-        elif self.data_source == "ccxt":
-            pass
-        elif self.data_source == "iexcloud":
-            time_intervals = ["1d"]
-            assert self.time_interval in time_intervals, (
-                "This time interval is not supported. Supported time intervals: "
-                + ",".join(time_intervals)
-            )
-            return self.time_interval.upper()
-        elif self.data_source == "joinquant":
-            # '1m', '5m', '15m', '30m', '60m', '120m', '1d', '1w', '1M'
-            time_intervals = [
-                "1m",
-                "5m",
-                "15m",
-                "30m",
-                "60m",
-                "120m",
-                "1d",
-                "1w",
-                "1M",
-            ]
-            assert self.time_interval in time_intervals, (
-                "This time interval is not supported. Supported time intervals: "
-                + ",".join(time_intervals)
-            )
-            return self.time_interval
-        elif self.data_source == "quantconnect":
-            pass
-        elif self.data_source == "ricequant":
-            #  nonstandard_time_interval: 'd' - 天，'w' - 周，'m' - 月， 'q' - 季，'y' - 年
-            time_intervals = ["d", "w", "M", "q", "y"]
-            assert self.time_interval[-1] in time_intervals, (
-                "This time interval is not supported. Supported time intervals: "
-                + ",".join(time_intervals)
-            )
-            if "M" in self.time_interval:
-                return self.time_interval.lower()
-            else:
-                return self.time_interval
-        elif self.data_source == "tushare":
-            # 分钟频度包括1分、5、15、30、60分数据. Not support currently.
-            # time_intervals = ["1m", "5m", "15m", "30m", "60m", "1d"]
-            time_intervals = ["1d"]
-            assert self.time_interval in time_intervals, (
-                "This time interval is not supported. Supported time intervals: "
-                + ",".join(time_intervals)
-            )
-            return self.time_interval
-        elif self.data_source == "wrds":
-            pass
-        elif self.data_source == "yahoofinance":
-            # nonstandard_time_interval: ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d","1wk", "1mo", "3mo"]
-            time_intervals = [
-                "1m",
-                "2m",
-                "5m",
-                "15m",
-                "30m",
-                "60m",
-                "90m",
-                "1h",
-                "1d",
-                "5d",
-                "1w",
-                "1M",
-                "3M",
-            ]
-            assert self.time_interval in time_intervals, (
-                "This time interval is not supported. Supported time intervals: "
-                + ",".join(time_intervals)
-            )
-            if "w" in self.time_interval:
-                return self.time_interval + "k"
-            elif "M" in self.time_interval:
-                return self.time_interval[:-1] + "mo"
-            else:
-                return self.time_interval
-        else:
-            raise ValueError(
-                f"Not support transfer_standard_time_interval for {self.data_source}"
-            )
 
     # "600000.XSHG" -> "sh.600000"
     # "000612.XSHE" -> "sz.000612"

@@ -1,19 +1,32 @@
 import os
 import pickle
-from typing import List
+from typing import List, Optional, Dict, Literal
 
 import numpy as np
 import pandas as pd
 
+import pydantic
+import alpaca_trade_api as tradeapi
 
-class DataProcessor:
+
+from trade_rl.meta.data_processors.alpaca_crypto import APIConfig
+
+
+class DataProcessor(pydantic.BaseModel):
+    data_source: Literal["alpaca", "alpacacrypto",
+                         "binance", "ccxt", "yahoofinance"]
+    start_date: str
+    end_date: str
+    time_interval: str
+    api_config: Optional[APIConfig]
+
     def __init__(
         self,
         data_source: str,
         start_date: str,
         end_date: str,
         time_interval: str,
-        **kwargs,
+        api_config: Optional[APIConfig] = None,
     ):
         self.data_source = data_source
         self.start_date = start_date
@@ -51,7 +64,7 @@ class DataProcessor:
 
         try:
             self.processor = processor_dict.get(self.data_source)(
-                data_source, start_date, end_date, time_interval, **kwargs
+                start_date, end_date, time_interval, api_config
             )
             print(f"{self.data_source} successfully connected")
         except:

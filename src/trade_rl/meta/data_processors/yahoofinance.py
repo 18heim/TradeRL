@@ -17,7 +17,7 @@ except:
 
     print("Use trading_calendars instead for yahoofinance processor..")
 
-from meta.config import (
+from trade_rl.meta.config import (
     BINANCE_BASE_URL,
     TIME_ZONE_BERLIN,
     TIME_ZONE_JAKARTA,
@@ -27,19 +27,17 @@ from meta.config import (
     TIME_ZONE_USEASTERN,
     USE_TIME_ZONE_SELFDEFINED,
 )
-from meta.data_processors._base import _Base, calc_time_zone
+from trade_rl.meta.data_processors._base import _Base, calc_time_zone
 
 
 class Yahoofinance(_Base):
     def __init__(
         self,
-        data_source: str,
         start_date: str,
         end_date: str,
         time_interval: str,
-        **kwargs
     ):
-        super().__init__(data_source, start_date, end_date, time_interval, **kwargs)
+        super().__init__("yahoofinance", start_date, end_date, time_interval)
 
     def download_data(self, ticker_list: List[str]):
         self.time_zone = calc_time_zone(
@@ -54,7 +52,8 @@ class Yahoofinance(_Base):
                 interval=self.time_interval,
             )
             temp_df["tic"] = tic
-            self.dataframe = pd.concat([self.dataframe, temp_df], axis=0, join="outer")
+            self.dataframe = pd.concat(
+                [self.dataframe, temp_df], axis=0, join="outer")
         self.dataframe.reset_index(inplace=True)
         try:
             self.dataframe.columns = [
@@ -84,7 +83,8 @@ class Yahoofinance(_Base):
         df = df.rename(columns={"date": "time"})
         time_interval = self.time_interval
         tic_list = np.unique(df.tic.values)
-        trading_days = self.get_trading_days(start=self.start_date, end=self.end_date)
+        trading_days = self.get_trading_days(
+            start=self.start_date, end=self.end_date)
         if time_interval == "1D":
             times = trading_days
         elif time_interval == "1Min":
@@ -151,7 +151,8 @@ class Yahoofinance(_Base):
             for i in range(tmp_df.shape[0]):
                 if str(tmp_df.iloc[i]["close"]) == "nan":
                     previous_close = tmp_df.iloc[i - 1]["close"]
-                    previous_adjusted_close = tmp_df.iloc[i - 1]["adjusted_close"]
+                    previous_adjusted_close = tmp_df.iloc[i -
+                                                          1]["adjusted_close"]
                     if str(previous_close) == "nan":
                         raise ValueError
                     tmp_df.iloc[i] = [
