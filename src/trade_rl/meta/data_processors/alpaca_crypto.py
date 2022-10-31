@@ -27,7 +27,7 @@ class AlpacaCrypto(_Base):
         super().__init__("alpacacrypto", start_date, end_date, time_interval, api_config)
         if self.api_config.API is None:
             try:
-                self.api = tradeapi.REST(**api_config,
+                self.api = tradeapi.REST(**self.api_config.dict(exclude_none=True),
                                          api_version="v2",
                                          )
             except BaseException:

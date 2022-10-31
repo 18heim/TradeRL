@@ -26,13 +26,12 @@ from trade_rl.meta.data_processors._base import _Base
 class Binance(_Base):
     def __init__(
         self,
-        data_source: str,
         start_date: str,
         end_date: str,
         time_interval: str,
         **kwargs,
     ):
-        super().__init__(data_source, start_date,
+        super().__init__("binance", start_date,
                          end_date, time_interval)
         self.url = "https://api.binance.com/api/v3/klines"
         self.time_diff = None

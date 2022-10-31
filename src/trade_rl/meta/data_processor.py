@@ -51,9 +51,9 @@ class DataProcessor:
         else:
             print(f"{self.data_source} is NOT supported yet.")
 
-        self.processor = processor_dict.get(self.data_source)(self.data_source,
-                                                              start_date, end_date, time_interval
-                                                              )
+        self.processor = processor_dict.get(self.data_source)(
+            start_date, end_date, time_interval, api_config
+        )
         print(f"{self.data_source} successfully connected")
         # except:
         #     raise ValueError(

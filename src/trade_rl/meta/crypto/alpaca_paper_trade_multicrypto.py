@@ -200,9 +200,12 @@ class AlpacaPaperTradingMultiCrypto:
         self.stocks = stocks
 
         # Stack cash and stocks
-        state = np.hstack((self.cash * 2**-18, self.stocks * 2**-3))
-        normalized_tech = cur_tech * 2**-15
-        state = np.hstack((state, normalized_tech)).astype(np.float32)
+        state = np.hstack((self.cash * config.CASH_SCALE,
+                          self.stocks * config.STOCK_QTY_SCALE))
+        normalized_tech = cur_tech * config.TECH_SCALE
+        normalized_price = cur_price * config.CASH_SCALE
+        state = np.hstack(
+            (state, normalized_price, normalized_tech)).astype(np.float32)
 
         print("\n" + "STATE:")
         print(state)

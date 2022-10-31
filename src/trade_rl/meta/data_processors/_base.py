@@ -7,6 +7,7 @@ import alpaca_trade_api as tradeapi
 import numpy as np
 import pandas as pd
 import pydantic
+from pydantic import Field
 import stockstats
 
 from trade_rl.meta.config import (
@@ -46,15 +47,15 @@ class TimeIntervalError(Exception):
 
 class APIConfig(pydantic.BaseModel):
     API: Optional[Any]
-    API_KEY:  Optional[str]
-    API_SECRET: Optional[str]
-    API_BASE_URL: Optional[pydantic.HttpUrl]
+    key_id:  Optional[str] = Field(alias="API_KEY")
+    secret_key: Optional[str] = Field(alias="API_SECRET")
+    base_url: Optional[pydantic.HttpUrl] = Field(alias="API_BASE_URL")
 
     @pydantic.root_validator(pre=True)
     @classmethod
     def check_api_or_key(cls, values):
         """Make sure we have either the secrets or the API."""
-        if "API" not in values and all(values != ["API_KEY", "API_SECRET", "API_BASE_URL"]):
+        if "API" not in values.keys() and list(values.keys()) != ["API_KEY", "API_SECRET", "API_BASE_URL"]:
             raise KeyError("Missing APIConfig keys")
         return values
 
@@ -77,29 +78,30 @@ class _Base(pydantic.BaseModel,  extra=pydantic.Extra.allow):
     @classmethod
     def parse_api_config(cls, value):
         """Parse API config dictionnary."""
-        return APIConfig(**value) if value else None
+        value = APIConfig(**value) if value else None
+        return value
 
     @pydantic.validator("time_interval")
     @classmethod
     def check_time_interval(cls, value, values):
         if "alpaca" in values["data_source"]:
             time_units = ["Min", "Hour", "Day", "Month"]
-            unit = filter(lambda x: x.isalpha(), value)
+            unit = ''.join(filter(lambda x: x.isalpha(), value))
             if not any([unit in allowed_unit for allowed_unit in time_units]):
                 raise TimeIntervalError(
-                    value, value["data_source"], time_units)
+                    value, values["data_source"], time_units)
         if values["data_source"] == "binance":
             time_intervals = ["1m", "3m", "5m", "15m", "30m", "1h", "2h",
                               "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"]
             if not value in time_intervals:
                 raise TimeIntervalError(
-                    value, value["data_source"], time_intervals)
+                    value, values["data_source"], time_intervals)
         if values["data_source"] == "yahoofinance":
             time_intervals = ["1m", "2m", "5m", "15m", "30m",
                               "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"]
             if not value in time_intervals:
                 raise TimeIntervalError(
-                    value, value["data_source"], time_intervals)
+                    value, values["data_source"], time_intervals)
         return value
 
     def __init__(
@@ -112,16 +114,11 @@ class _Base(pydantic.BaseModel,  extra=pydantic.Extra.allow):
     ):
         super().__init__(data_source=data_source, start_date=start_date,
                          end_date=end_date, time_interval=time_interval, api_config=api_config)
-        self.data_source = data_source
-        self.time_interval = time_interval  # standard time_interval
         self.time_zone = ""
         self.dataframe: pd.DataFrame = pd.DataFrame()
         self.dictnumpy: dict = (
             {}
         )  # e.g., self.dictnumpy["open"] = np.array([1, 2, 3]), self.dictnumpy["close"] = np.array([1, 2, 3])
-        self.start_date = start_date
-        self.end_date = end_date
-        self.api_config = api_config
 
     def download_data(self, ticker_list: List[str]):
         pass
