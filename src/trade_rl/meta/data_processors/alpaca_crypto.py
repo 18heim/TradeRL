@@ -19,12 +19,12 @@ from trade_rl.meta.data_processors._base import (
 class AlpacaCrypto(_Base):
     def __init__(
         self,
-        start_date: str,
-        end_date: str,
         time_interval: str,
         api_config: APIConfig,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ):
-        super().__init__("alpacacrypto", start_date, end_date, time_interval, api_config)
+        super().__init__("alpacacrypto", time_interval, start_date, end_date, api_config)
         if self.api_config.API is None:
             try:
                 self.api = tradeapi.REST(**self.api_config.dict(exclude_none=True),

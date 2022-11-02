@@ -63,8 +63,8 @@ class APIConfig(pydantic.BaseModel):
 class _Base(pydantic.BaseModel,  extra=pydantic.Extra.allow):
     data_source: Literal["alpaca", "alpacacrypto",
                          "ccxt", "binance", "yahoofinance"]
-    start_date: dt.datetime
-    end_date: dt.datetime
+    start_date: Optional[dt.datetime] = None
+    end_date: Optional[dt.datetime] = None
     time_interval: str
     api_config: Optional[APIConfig]
 
@@ -72,7 +72,7 @@ class _Base(pydantic.BaseModel,  extra=pydantic.Extra.allow):
     @classmethod
     def parse_date(cls, value):
         """Parse start_date and end_date."""
-        return dt.datetime.fromisoformat(value)
+        return dt.datetime.fromisoformat(value) if value else None
 
     @pydantic.validator("api_config", pre=True)
     @classmethod
@@ -107,9 +107,9 @@ class _Base(pydantic.BaseModel,  extra=pydantic.Extra.allow):
     def __init__(
         self,
         data_source: str,
-        start_date: str,
-        end_date: str,
         time_interval: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         api_config: Optional[APIConfig] = None,
     ):
         super().__init__(data_source=data_source, start_date=start_date,
