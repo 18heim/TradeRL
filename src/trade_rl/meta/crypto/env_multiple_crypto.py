@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 import gym
-from trade_rl.meta import config
+from trade_rl.meta import constants
 
 # TODO:
 # je veux pouvoir facilement configurer le max de stock qu'on puisse acheter.
@@ -132,7 +132,7 @@ class CryptoEnv(gym.Env):
         # Compute reward
         next_total_asset = self.cash + \
             (self.stocks * self.price_array[self.time]).sum()
-        reward = (next_total_asset - self.total_asset) * config.REWARD_SCALE
+        reward = (next_total_asset - self.total_asset) * constants.REWARD_SCALE
         self.total_asset = next_total_asset
         self.gamma_return = self.gamma_return * self.gamma + reward
         self.cumu_return = self.total_asset / self.initial_cash
@@ -150,12 +150,12 @@ class CryptoEnv(gym.Env):
             - (tech_indicators, price) for each stock for a certain number
                 of lookback time steps.
         """
-        state = np.hstack((self.cash * config.CASH_SCALE,
-                          self.stocks * config.STOCK_QTY_SCALE))
+        state = np.hstack((self.cash * constants.CASH_SCALE,
+                          self.stocks * constants.STOCK_QTY_SCALE))
         for i in range(self.lookback):
             tech_i = self.tech_array[self.time - i]
-            price_i = self.price_array[self.time - i] * config.CASH_SCALE
-            normalized_tech_i = tech_i * config.TECH_SCALE
+            price_i = self.price_array[self.time - i] * constants.CASH_SCALE
+            normalized_tech_i = tech_i * constants.TECH_SCALE
             state = np.hstack(
                 (state, price_i, normalized_tech_i)).astype(np.float32)
         return state

@@ -10,14 +10,14 @@ from typing import List
 import pandas as pd
 import requests
 
-from trade_rl.meta.config import BINANCE_BASE_URL
-from trade_rl.meta.config import TIME_ZONE_BERLIN
-from trade_rl.meta.config import TIME_ZONE_JAKARTA
-from trade_rl.meta.config import TIME_ZONE_PARIS
-from trade_rl.meta.config import TIME_ZONE_SELFDEFINED
-from trade_rl.meta.config import TIME_ZONE_SHANGHAI
-from trade_rl.meta.config import TIME_ZONE_USEASTERN
-from trade_rl.meta.config import USE_TIME_ZONE_SELFDEFINED
+from trade_rl.meta.constants import BINANCE_BASE_URL
+from trade_rl.meta.constants import TIME_ZONE_BERLIN
+from trade_rl.meta.constants import TIME_ZONE_JAKARTA
+from trade_rl.meta.constants import TIME_ZONE_PARIS
+from trade_rl.meta.constants import TIME_ZONE_SELFDEFINED
+from trade_rl.meta.constants import TIME_ZONE_SHANGHAI
+from trade_rl.meta.constants import TIME_ZONE_USEASTERN
+from trade_rl.meta.constants import USE_TIME_ZONE_SELFDEFINED
 from trade_rl.meta.data_processors._base import _Base
 
 # from _base import check_date

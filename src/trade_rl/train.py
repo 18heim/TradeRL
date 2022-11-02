@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 
 from trade_rl.agents.drl_agent import DRLAgent
 from trade_rl.meta.data_processor import DataProcessor

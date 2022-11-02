@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pydantic
 
-from trade_rl.meta.config import TIME_ZONE_SELFDEFINED
+from trade_rl.meta.constants import TIME_ZONE_SELFDEFINED
 # from basic_processor import _Base
 from trade_rl.meta.data_processors._base import (
     APIConfig,

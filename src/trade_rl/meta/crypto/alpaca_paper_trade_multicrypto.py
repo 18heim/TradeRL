@@ -6,7 +6,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from trade_rl.meta import config
+from trade_rl.meta import constants
 from trade_rl.meta.data_processors.alpaca_crypto import AlpacaCrypto
 from trade_rl.meta.crypto.env_multiple_crypto import generate_action_normalizer
 from trade_rl.meta.data_processors._base import time_convert
@@ -18,7 +18,7 @@ class AlpacaPaperTradingMultiCrypto:
         ticker_list,
         time_interval,
         agent,
-        cwd,
+        agent_path,
         action_dim,
         api_config,
         tech_indicator_list,
@@ -30,8 +30,8 @@ class AlpacaPaperTradingMultiCrypto:
 
             try:
                 # load agent
-                self.model = PPO.load(cwd)
-                print("Successfully load model", cwd)
+                self.model = PPO.load(agent_path)
+                print("Successfully load model", agent_path)
             except:
                 raise ValueError("Fail to load agent!")
         else:
@@ -184,7 +184,6 @@ class AlpacaPaperTradingMultiCrypto:
             - (tech_indicators, price) for each stock for
                 a certain number of lookback time steps
         """
-        # TODO: CHanger cwd, devrait être agent_path.
         # Fetch a window of lookback time steps price & tech.
         print("fetching latest candles..")
         cur_price, cur_tech, _ = self.alpaca.fetch_latest_data(
@@ -208,10 +207,10 @@ class AlpacaPaperTradingMultiCrypto:
         self.cash = cash
 
         # Stack cash and stocks
-        state = np.hstack((self.cash * config.CASH_SCALE,
-                          self.stocks * config.STOCK_QTY_SCALE))
-        normalized_tech = cur_tech * config.TECH_SCALE
-        normalized_price = cur_price * config.CASH_SCALE
+        state = np.hstack((self.cash * constants.CASH_SCALE,
+                          self.stocks * constants.STOCK_QTY_SCALE))
+        normalized_tech = cur_tech * constants.TECH_SCALE
+        normalized_price = cur_price * constants.CASH_SCALE
         state = np.hstack(
             (state, normalized_price, normalized_tech)).astype(np.float32)
 

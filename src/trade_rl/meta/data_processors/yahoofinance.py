@@ -17,7 +17,7 @@ except:
 
     print("Use trading_calendars instead for yahoofinance processor..")
 
-from trade_rl.meta.config import (
+from trade_rl.meta.constants import (
     BINANCE_BASE_URL,
     TIME_ZONE_BERLIN,
     TIME_ZONE_JAKARTA,

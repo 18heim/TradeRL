@@ -19,7 +19,7 @@ except:
 from trade_rl.meta.data_processors._base import _Base
 from trade_rl.meta.data_processors._base import calc_time_zone
 
-from trade_rl.meta.config import (
+from trade_rl.meta.constants import (
     TIME_ZONE_SHANGHAI,
     TIME_ZONE_USEASTERN,
     TIME_ZONE_PARIS,

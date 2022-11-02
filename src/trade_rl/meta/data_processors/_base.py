@@ -10,7 +10,7 @@ import pydantic
 from pydantic import Field
 import stockstats
 
-from trade_rl.meta.config import (
+from trade_rl.meta.constants import (
     TIME_ZONE_BERLIN,
     TIME_ZONE_JAKARTA,
     TIME_ZONE_PARIS,

@@ -12,14 +12,14 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.noise import OrnsteinUhlenbeckActionNoise
 
-from trade_rl.meta import config
+from trade_rl.meta import constants
 
 # RL models from stable-baselines
 
 
 MODELS = {"a2c": A2C, "ddpg": DDPG, "td3": TD3, "sac": SAC, "ppo": PPO}
 
-MODEL_KWARGS = {x: config.__dict__[f"{x.upper()}_PARAMS"]
+MODEL_KWARGS = {x: constants.__dict__[f"{x.upper()}_PARAMS"]
                 for x in MODELS.keys()}
 
 NOISE = {
@@ -92,7 +92,7 @@ class DRLAgent:
         model = MODELS[model_name](
             policy=policy,
             env=self.env,
-            tensorboard_log=f"{config.TENSORBOARD_LOG_DIR}/{model_name}",
+            tensorboard_log=f"{constants.TENSORBOARD_LOG_DIR}/{model_name}",
             verbose=verbose,
             policy_kwargs=policy_kwargs,
             seed=seed,
