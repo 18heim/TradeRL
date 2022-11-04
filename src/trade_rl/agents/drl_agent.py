@@ -12,14 +12,14 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.noise import OrnsteinUhlenbeckActionNoise
 
-from trade_rl.meta import config
+from trade_rl.meta import constants
 
 # RL models from stable-baselines
 
 
 MODELS = {"a2c": A2C, "ddpg": DDPG, "td3": TD3, "sac": SAC, "ppo": PPO}
 
-MODEL_KWARGS = {x: config.__dict__[f"{x.upper()}_PARAMS"]
+MODEL_KWARGS = {x: constants.__dict__[f"{x.upper()}_PARAMS"]
                 for x in MODELS.keys()}
 
 NOISE = {
@@ -92,7 +92,7 @@ class DRLAgent:
         model = MODELS[model_name](
             policy=policy,
             env=self.env,
-            tensorboard_log=f"{config.TENSORBOARD_LOG_DIR}/{model_name}",
+            tensorboard_log=f"{constants.TENSORBOARD_LOG_DIR}/{model_name}",
             verbose=verbose,
             policy_kwargs=policy_kwargs,
             seed=seed,
@@ -108,39 +108,8 @@ class DRLAgent:
         )
         return model
 
-    @staticmethod
-    def DRL_prediction(model, environment):
-        test_env, test_obs = environment.get_sb_env()
-        """make a prediction"""
-        account_memory = []
-        actions_memory = []
-        test_env.reset()
-        for i in range(len(environment.df.index.unique())):
-            action, _states = model.predict(test_obs)
-            # account_memory = test_env.env_method(method_name="save_asset_memory")
-            # actions_memory = test_env.env_method(method_name="save_action_memory")
-            test_obs, rewards, dones, info = test_env.step(action)
-            if i == (len(environment.df.index.unique()) - 2):
-                account_memory = test_env.env_method(
-                    method_name="save_asset_memory")
-                actions_memory = test_env.env_method(
-                    method_name="save_action_memory")
-            if dones[0]:
-                print("hit end!")
-                break
-        return account_memory[0], actions_memory[0]
-
-    @staticmethod
-    def DRL_prediction_load_from_file(model_name, environment, cwd):
-        if model_name not in MODELS:
-            raise NotImplementedError("NotImplementedError")
-        try:
-            # load agent
-            model = MODELS[model_name].load(cwd)
-            print("Successfully load model", cwd)
-        except BaseException:
-            raise ValueError("Fail to load agent!")
-
+    @classmethod
+    def DRL_prediction(cls, model, environment):
         # test on the testing env
         state = environment.reset()
         episode_returns = list()  # the cumulative_return / initial_account
@@ -162,4 +131,18 @@ class DRLAgent:
 
         print("episode_return", episode_return)
         print("Test Finished!")
+        return episode_total_assets
+
+    @classmethod
+    def DRL_prediction_load_from_file(cls, model_name, environment, cwd):
+        if model_name not in MODELS:
+            raise NotImplementedError("NotImplementedError")
+        try:
+            # load agent
+            model = MODELS[model_name].load(cwd)
+            print("Successfully load model", cwd)
+        except BaseException:
+            raise ValueError("Fail to load agent!")
+
+        episode_total_assets = cls.DRL_prediction(model, environment)
         return episode_total_assets

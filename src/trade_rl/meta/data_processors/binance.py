@@ -10,16 +10,15 @@ from typing import List
 import pandas as pd
 import requests
 
-from trade_rl.meta.config import BINANCE_BASE_URL
-from trade_rl.meta.config import TIME_ZONE_BERLIN
-from trade_rl.meta.config import TIME_ZONE_JAKARTA
-from trade_rl.meta.config import TIME_ZONE_PARIS
-from trade_rl.meta.config import TIME_ZONE_SELFDEFINED
-from trade_rl.meta.config import TIME_ZONE_SHANGHAI
-from trade_rl.meta.config import TIME_ZONE_USEASTERN
-from trade_rl.meta.config import USE_TIME_ZONE_SELFDEFINED
+from trade_rl.meta.constants import BINANCE_BASE_URL
+from trade_rl.meta.constants import TIME_ZONE_BERLIN
+from trade_rl.meta.constants import TIME_ZONE_JAKARTA
+from trade_rl.meta.constants import TIME_ZONE_PARIS
+from trade_rl.meta.constants import TIME_ZONE_SELFDEFINED
+from trade_rl.meta.constants import TIME_ZONE_SHANGHAI
+from trade_rl.meta.constants import TIME_ZONE_USEASTERN
+from trade_rl.meta.constants import USE_TIME_ZONE_SELFDEFINED
 from trade_rl.meta.data_processors._base import _Base
-from trade_rl.meta.data_processors._base import check_date
 
 # from _base import check_date
 
@@ -27,18 +26,13 @@ from trade_rl.meta.data_processors._base import check_date
 class Binance(_Base):
     def __init__(
         self,
-        data_source: str,
         start_date: str,
         end_date: str,
         time_interval: str,
         **kwargs,
     ):
-        if time_interval == "1D":
-            raise ValueError("Please use the time_interval 1d instead of 1D")
-        if time_interval == "1d":
-            check_date(start_date)
-            check_date(end_date)
-        super().__init__(data_source, start_date, end_date, time_interval, **kwargs)
+        super().__init__("binance", start_date,
+                         end_date, time_interval)
         self.url = "https://api.binance.com/api/v3/klines"
         self.time_diff = None
 

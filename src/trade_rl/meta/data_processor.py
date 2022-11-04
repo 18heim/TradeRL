@@ -1,9 +1,11 @@
 import os
 import pickle
-from typing import List
+from typing import Dict, List, Literal, Optional
 
 import numpy as np
 import pandas as pd
+
+from trade_rl.meta.data_processors.alpaca_crypto import APIConfig
 
 
 class DataProcessor:
@@ -13,7 +15,7 @@ class DataProcessor:
         start_date: str,
         end_date: str,
         time_interval: str,
-        **kwargs,
+        api_config: Optional[APIConfig] = None,
     ):
         self.data_source = data_source
         self.start_date = start_date
@@ -49,15 +51,15 @@ class DataProcessor:
         else:
             print(f"{self.data_source} is NOT supported yet.")
 
-        try:
-            self.processor = processor_dict.get(self.data_source)(
-                data_source, start_date, end_date, time_interval, **kwargs
-            )
-            print(f"{self.data_source} successfully connected")
-        except:
-            raise ValueError(
-                f"Please input correct account info for {self.data_source}!"
-            )
+        self.processor = processor_dict.get(self.data_source)(
+            time_interval=time_interval, start_date=start_date,
+            end_date=end_date, api_config=api_config,
+        )
+        print(f"{self.data_source} successfully connected")
+        # except:
+        #     raise ValueError(
+        #         f"Please input correct account info for {self.data_source}!"
+        #     )
 
     def download_data(self, ticker_list):
         self.processor.download_data(ticker_list=ticker_list)
@@ -112,7 +114,6 @@ class DataProcessor:
         technical_indicator_list: List[str],
         if_vix: bool,
         cache: bool = False,
-        select_stockstats_talib: int = 0,
     ):
 
         if self.time_interval == "1s" and self.data_source != "binance":

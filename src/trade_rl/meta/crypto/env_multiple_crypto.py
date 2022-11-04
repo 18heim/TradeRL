@@ -3,12 +3,25 @@ import math
 import numpy as np
 
 import gym
+from trade_rl.meta import constants
+
+# TODO:
+# je veux pouvoir facilement configurer le max de stock qu'on puisse acheter.
+# pourquoi est-ce qu'on met pas des montants en € sur l'achat d'action plutôt que
+# de dire j'achète 0.3 bitcoin et de normalizer donc des actions qui ne sont pas du tout sur
+# la même échelle et d'utiliser un mecanisme chelou pour les standardiser ?
+# En plus ça empêche d'avoir un contrôle et de faire des actions avec un faible Apport.
 
 
-class CryptoEnv(gym.Env):  # custom env
+class CryptoEnv(gym.Env):
+    """Env for trading multiple Crypto Currencies.
+
+    Inherits gym.Env.
+    """
+
     def __init__(
         self,
-        config,
+        data_config,
         lookback=1,
         initial_capital=1e6,
         buy_cost_pct=1e-3,
@@ -22,8 +35,8 @@ class CryptoEnv(gym.Env):  # custom env
         self.sell_cost_pct = sell_cost_pct
         self.max_stock = 1
         self.gamma = gamma
-        self.price_array = config["price_array"]
-        self.tech_array = config["tech_array"]
+        self.price_array = data_config["price_array"]
+        self.tech_array = data_config["tech_array"]
         self._generate_action_normalizer()
         self.crypto_num = self.price_array.shape[1]
         self.max_step = self.price_array.shape[0] - lookback - 1
@@ -42,9 +55,10 @@ class CryptoEnv(gym.Env):  # custom env
 
         """env information"""
         self.env_name = "MulticryptoEnv"
+        # Cash + n_stocks_held + (price, tech_array) * n_stocks  * lookback
         self.state_dim = (
-            1 + (self.price_array.shape[1] +
-                 self.tech_array.shape[1]) * lookback
+            1 + self.price_array.shape[1] +
+            (self.price_array.shape[1] + self.tech_array.shape[1]) * lookback
         )
         self.action_dim = self.price_array.shape[1]
         self.if_discrete = False
@@ -58,6 +72,10 @@ class CryptoEnv(gym.Env):  # custom env
         )
 
     def reset(self) -> np.ndarray:
+        """Reset env.
+
+        Set time to 0, set price at first step etc etc.
+        """
         self.time = self.lookback - 1
         self.current_price = self.price_array[self.time]
         self.current_tech = self.tech_array[self.time]
@@ -69,20 +87,37 @@ class CryptoEnv(gym.Env):  # custom env
         return self.get_state()
 
     def step(self, actions) -> (np.ndarray, float, bool, None):
-        self.time += 1
+        """Take a step in MDP.
 
+        Increment time.
+        Fetch current price.
+        Normalize action according to average price of a single stock quantity,
+        to take into account the difference in scale of crypto prices.
+        Retrieve stock index to sell. Sell desired quantity or max available.
+        Decrement stock quantity.
+        Increment cash taking broker fee into account.
+        Retrieve stock index to buy. Buy desired quantity or max cash available.
+        Increment stock quantity.
+        Decrement cash taking broker fee into account.
+        Update state.
+        Compute reward.
+        """
+        self.time += 1
         price = self.price_array[self.time]
+        # Normalize actions.
         for i in range(self.action_dim):
             norm_vector_i = self.action_norm_vector[i]
             actions[i] = actions[i] * norm_vector_i
 
-        for index in np.where(actions < 0)[0]:  # sell_index:
+        # Sell stock.
+        for index in np.where(actions < 0)[0]:
             if price[index] > 0:  # Sell only if current asset is > 0
                 sell_num_shares = min(self.stocks[index], -actions[index])
                 self.stocks[index] -= sell_num_shares
                 self.cash += price[index] * \
                     sell_num_shares * (1 - self.sell_cost_pct)
 
+        # Buy stock
         for index in np.where(actions > 0)[0]:  # buy_index:
             if (
                 price[index] > 0
@@ -91,13 +126,13 @@ class CryptoEnv(gym.Env):  # custom env
                 self.stocks[index] += buy_num_shares
                 self.cash -= price[index] * \
                     buy_num_shares * (1 + self.buy_cost_pct)
-
-        """update time"""
         done = self.time == self.max_step
+        # Update state
         state = self.get_state()
+        # Compute reward
         next_total_asset = self.cash + \
             (self.stocks * self.price_array[self.time]).sum()
-        reward = (next_total_asset - self.total_asset) * 2**-16
+        reward = (next_total_asset - self.total_asset) * constants.REWARD_SCALE
         self.total_asset = next_total_asset
         self.gamma_return = self.gamma_return * self.gamma + reward
         self.cumu_return = self.total_asset / self.initial_cash
@@ -107,25 +142,43 @@ class CryptoEnv(gym.Env):  # custom env
         return state, reward, done, dict()
 
     def get_state(self):
-        state = np.hstack((self.cash * 2**-18, self.stocks * 2**-3))
+        """Compute state.
+
+        State comprises:
+            - Cash balance.
+            - Stocks qty held.
+            - (tech_indicators, price) for each stock for a certain number
+                of lookback time steps.
+        """
+        state = np.hstack((self.cash * constants.CASH_SCALE,
+                          self.stocks * constants.STOCK_QTY_SCALE))
         for i in range(self.lookback):
             tech_i = self.tech_array[self.time - i]
-            normalized_tech_i = tech_i * 2**-15
-            state = np.hstack((state, normalized_tech_i)).astype(np.float32)
+            price_i = self.price_array[self.time - i] * constants.CASH_SCALE
+            normalized_tech_i = tech_i * constants.TECH_SCALE
+            state = np.hstack(
+                (state, price_i, normalized_tech_i)).astype(np.float32)
         return state
 
     def close(self):
         pass
 
     def _generate_action_normalizer(self):
-        # normalize action to adjust for large price differences in cryptocurrencies
-        action_norm_vector = []
+        """normalize action to adjust for large price differences in cryptocurrencies."""
         price_0 = self.price_array[0]  # Use row 0 prices to normalize
-        for price in price_0:
-            x = math.floor(math.log(price, 10))  # the order of magnitude
-            action_norm_vector.append(1 / ((10) ** x))
+        self.action_norm_vector = generate_action_normalizer(price_0)
 
-        action_norm_vector = (
-            np.asarray(action_norm_vector) * 10000
-        )  # roughly control the maximum transaction amount for each action
-        self.action_norm_vector = np.asarray(action_norm_vector)
+
+def generate_action_normalizer(base_price):
+    """Utility function standardizing prices."""
+    # TODO: Stock qty are scaled but I would like to set a max amount for an action.
+    # Or take the initial_capital into account.
+    action_norm_vector = []
+    for stock_price in base_price:
+        x = math.floor(math.log(stock_price, 10))  # the order of magnitude
+        action_norm_vector.append(1 / ((10) ** x))
+
+    action_norm_vector = (
+        np.asarray(action_norm_vector) * 10000
+    )  # roughly control the maximum transaction amount for each action
+    return np.asarray(action_norm_vector)

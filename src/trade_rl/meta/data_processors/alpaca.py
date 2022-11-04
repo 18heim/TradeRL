@@ -19,7 +19,7 @@ except:
 from trade_rl.meta.data_processors._base import _Base
 from trade_rl.meta.data_processors._base import calc_time_zone
 
-from trade_rl.meta.config import (
+from trade_rl.meta.constants import (
     TIME_ZONE_SHANGHAI,
     TIME_ZONE_USEASTERN,
     TIME_ZONE_PARIS,
@@ -28,37 +28,27 @@ from trade_rl.meta.config import (
     BINANCE_BASE_URL,
 )
 
+from trade_rl.meta.data_processors.alpaca_crypto import APIConfig
+
 
 class Alpaca(_Base):
-    # def __init__(self, API_KEY=None, API_SECRET=None, API_BASE_URL=None, api=None):
-    #     if api is None:
-    #         try:
-    #             self.api = tradeapi.REST(API_KEY, API_SECRET, API_BASE_URL, "v2")
-    #         except BaseException:
-    #             raise ValueError("Wrong Account Info!")
-    #     else:
-    #         self.api = api
     def __init__(
         self,
-        data_source: str,
         start_date: str,
         end_date: str,
         time_interval: str,
-        **kwargs
+        api_config: APIConfig,
     ):
-        super().__init__(data_source, start_date, end_date, time_interval, **kwargs)
-        if kwargs.get("API") is None:
+        super().__init__("alpaca", start_date, end_date, time_interval, api_config)
+        if api_config.API is None:
             try:
-                self.api = tradeapi.REST(
-                    kwargs["API_KEY"],
-                    kwargs["API_SECRET"],
-                    kwargs["API_BASE_URL"],
-                    "v2",
-                )
+                self.api = tradeapi.REST(**api_config,
+                                         "v2",
+                                         )
             except BaseException:
                 raise ValueError("Wrong Account Info!")
         else:
-            self.api = kwargs["API"]
+            self.api = api_config.API
 
     def download_data(
         self, ticker_list: List[str]

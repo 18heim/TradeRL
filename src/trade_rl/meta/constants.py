@@ -27,6 +27,11 @@ INDICATORS = [
     "close_60_sma",
 ]
 
+CASH_SCALE = 2**-18
+STOCK_QTY_SCALE = 2**-3
+TECH_SCALE = 2**-15
+REWARD_SCALE = 2**-16
+
 
 # Model Parameters
 A2C_PARAMS = {"n_steps": 5, "ent_coef": 0.01, "learning_rate": 0.0007}
@@ -72,7 +77,7 @@ TIME_ZONE_SELFDEFINED = "Europe/Paris"
 USE_TIME_ZONE_SELFDEFINED = 0  # 0 (default) or 1 (use the self defined)
 
 # parameters for data sources
-ALPACA_API_KEY = "xxx"  # your ALPACA_API_KEY
-ALPACA_API_SECRET = "xxx"  # your ALPACA_API_SECRET
+ALPACA_API_KEY = "PKEIK4CR04Q07GSQ6XQQ"  # your ALPACA_API_KEY
+ALPACA_API_SECRET = "W2canh1LeJt1vBMejpQ6QrDXR19X4nxvKWC13OyS"  # your ALPACA_API_SECRET
 ALPACA_API_BASE_URL = "https://paper-api.alpaca.markets"  # alpaca url
 BINANCE_BASE_URL = "https://data.binance.vision/"  # binance url

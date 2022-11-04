@@ -2,15 +2,13 @@
 import math
 import threading
 import time
-from datetime import datetime
-from datetime import timedelta
 
-import alpaca_trade_api as tradeapi
 import numpy as np
 import pandas as pd
-import torch
 
+from trade_rl.meta import constants
 from trade_rl.meta.data_processors.alpaca_crypto import AlpacaCrypto
+from trade_rl.meta.crypto.env_multiple_crypto import generate_action_normalizer
 from trade_rl.meta.data_processors._base import time_convert
 
 
@@ -20,23 +18,20 @@ class AlpacaPaperTradingMultiCrypto:
         ticker_list,
         time_interval,
         agent,
-        cwd,
+        agent_path,
         action_dim,
-        API_KEY,
-        API_SECRET,
-        API_BASE_URL,
+        api_config,
         tech_indicator_list,
         max_stock=1e2,
     ):
-        # load agent
         # load agent
         if agent == "ppo":
             from stable_baselines3 import PPO
 
             try:
                 # load agent
-                self.model = PPO.load(cwd)
-                print("Successfully load model", cwd)
+                self.model = PPO.load(agent_path)
+                print("Successfully load model", agent_path)
             except:
                 raise ValueError("Fail to load agent!")
         else:
@@ -44,8 +39,8 @@ class AlpacaPaperTradingMultiCrypto:
 
         # connect to Alpaca trading API
         try:
-            self.alpaca = tradeapi.REST(
-                API_KEY, API_SECRET, API_BASE_URL, "v2")
+            self.alpaca = AlpacaCrypto(
+                time_interval=time_interval, api_config=api_config)
             print("Connected to Alpaca API!")
         except:
             raise ValueError(
@@ -80,6 +75,7 @@ class AlpacaPaperTradingMultiCrypto:
         self.equities = []
 
     def test_latency(self, test_times=10):
+        """Test API Latency."""
         total_time = 0
         for _ in range(test_times):
             time0 = time.time()
@@ -92,9 +88,10 @@ class AlpacaPaperTradingMultiCrypto:
         return latency
 
     def run(self):
-        orders = self.alpaca.list_orders(status="open")
+        """Start trading."""
+        orders = self.alpaca.api.list_orders(status="open")
         for order in orders:
-            self.alpaca.cancel_order(order.id)
+            self.alpaca.api.cancel_order(order.id)
         while True:
             print("\n" + "#################### NEW CANDLE ####################")
             print("#################### NEW CANDLE ####################" + "\n")
@@ -102,38 +99,39 @@ class AlpacaPaperTradingMultiCrypto:
             trade = threading.Thread(target=self.trade)
             trade.start()
             trade.join()
-            last_equity = float(self.alpaca.get_account().last_equity)
+            last_equity = float(self.alpaca.api.get_account().last_equity)
             cur_time = time.time()
             self.equities.append([cur_time, last_equity])
             time.sleep(time_convert(self.time_interval))
 
     def trade(self):
+        """Async trade function.
+
+        Get state.
+        Predict action in [-1,1] for each stock.
+        Normalize action according to average price of a single stock quantity,
+        to take into account the difference in scale of crypto prices.
+
+        """
         # Get state
         state = self.get_state()
 
         # Get action
         action = self.model.predict(state)[0]
-        action = (action * self.max_stock).astype(float)
+        # action = (action * self.max_stock).astype(float)
 
         print("\n" + "ACTION:    ", action, "\n")
         # Normalize action
-        action_norm_vector = []
-        for price in self.price:
-            print("PRICE:    ", price)
-            x = math.floor(math.log(price, 10)) - 2
-            print("MAG:      ", x)
-            action_norm_vector.append(1 / ((10) ** x))
-            print("NORM VEC: ", action_norm_vector)
-
+        action_norm_vector = generate_action_normalizer(self.price)
         for i in range(self.action_dim):
             norm_vector_i = action_norm_vector[i]
             action[i] = action[i] * norm_vector_i
 
         print("\n" + "NORMALIZED ACTION:    ", action, "\n")
 
-        # Trade
         self.stocks_cd += 1
         min_action = 10 ** -(self.action_decimals)  # stock_cd
+        # Sell stock
         for index in np.where(action < -min_action)[0]:  # sell_index:
             sell_num_shares = min(self.stocks[index], -action[index])
 
@@ -148,9 +146,10 @@ class AlpacaPaperTradingMultiCrypto:
             )
             tSubmitOrder.start()
             tSubmitOrder.join()
-            self.cash = float(self.alpaca.get_account().cash)
+            # Update cash balance.
+            self.cash = float(self.alpaca.api.get_account().cash)
             self.stocks_cd[index] = 0
-
+        # Buy stock
         for index in np.where(action > min_action)[0]:  # buy_index:
             tmp_cash = max(self.cash, 0)
             print("current cash:", tmp_cash)
@@ -170,39 +169,50 @@ class AlpacaPaperTradingMultiCrypto:
             )
             tSubmitOrder.start()
             tSubmitOrder.join()
-            self.cash = float(self.alpaca.get_account().cash)
+            # Update cash balance.
+            self.cash = float(self.alpaca.api.get_account().cash)
             self.stocks_cd[index] = 0
 
         print("Trade finished")
 
     def get_state(self):
-        alpaca_proc = AlpacaCrypto(data_source="alpacacrypto",
-                                   API=self.alpaca, time_interval=self.time_interval)
+        """Compute state.
 
-        cur_price, cur_tech, _ = alpaca_proc.fetch_latest_data(
+        State comprises:
+            - Cash balance
+            - Stock qty held 
+            - (tech_indicators, price) for each stock for
+                a certain number of lookback time steps
+        """
+        # Fetch a window of lookback time steps price & tech.
+        print("fetching latest candles..")
+        cur_price, cur_tech, _ = self.alpaca.fetch_latest_data(
             ticker_list=self.stockUniverse,
             time_interval=self.time_interval,
             tech_indicator_list=self.tech_indicator_list,
         )
-
-        print("fetching latest candles..")
-        positions = self.alpaca.list_positions()
-        stocks = [0] * len(self.stockUniverse)
         self.price = cur_price
 
+        # Fetch stock qty held.
+        positions = self.alpaca.api.list_positions()
+        stocks = [0] * len(self.stockUniverse)
         for position in positions:
             ind = self.stockUniverse.index(position.symbol)
             stocks[ind] = abs(int(float(position.qty)))
-
         stocks = np.asarray(stocks, dtype=float)
-        cash = float(self.alpaca.get_account().cash)
-        self.cash = cash
         self.stocks = stocks
 
+        # Fetch cash balance
+        cash = float(self.alpaca.api.get_account().cash)
+        self.cash = cash
+
         # Stack cash and stocks
-        state = np.hstack((self.cash * 2**-18, self.stocks * 2**-3))
-        normalized_tech = cur_tech * 2**-15
-        state = np.hstack((state, normalized_tech)).astype(np.float32)
+        state = np.hstack((self.cash * constants.CASH_SCALE,
+                          self.stocks * constants.STOCK_QTY_SCALE))
+        normalized_tech = cur_tech * constants.TECH_SCALE
+        normalized_price = cur_price * constants.CASH_SCALE
+        state = np.hstack(
+            (state, normalized_price, normalized_tech)).astype(np.float32)
 
         print("\n" + "STATE:")
         print(state)
@@ -212,7 +222,7 @@ class AlpacaPaperTradingMultiCrypto:
     def submitOrder(self, qty, stock, side, resp):
         if qty > 0:
             try:
-                self.alpaca.submit_order(stock, qty, side, "market", "gtc")
+                self.alpaca.api.submit_order(stock, qty, side, "market", "gtc")
                 print(
                     "Market order of | "
                     + str(qty)
