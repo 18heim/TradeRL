@@ -13,7 +13,9 @@ def train(drl_lib: str,
           data_config: DictConfig,
           cwd: Path,
           env_class: Any,
-          model_params: DictConfig):
+          model_params: DictConfig,
+          initial_capital: float,):
+    """Training RL Model."""
     # read parameters and load agents
     cwd = cwd / model_params["model_name"]
     DP = DataProcessor(**processor_config)
@@ -22,7 +24,8 @@ def train(drl_lib: str,
                                                                                                     data_config["if_vix"], cache=True)
 
     # build environment using processed data
-    env_instance = env_class(data_config=data_config)
+    env_instance = env_class(data_config=data_config,
+                             initial_capital=initial_capital)
 
     if drl_lib == "stable_baselines3":
         total_timesteps = model_params.get("total_timesteps", 1e6)

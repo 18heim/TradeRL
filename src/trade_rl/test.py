@@ -13,7 +13,9 @@ def test(drl_lib: str,
          data_config: DictConfig,
          cwd: Path,
          env_class: Any,
-         model_name: str):
+         model_name: str,
+         initial_capital: float):
+    """Testing RL Model."""
     # read parameters and load agents
     cwd = cwd / model_name
     DP = DataProcessor(**processor_config)
@@ -25,10 +27,11 @@ def test(drl_lib: str,
 
     # build environment using processed data
     data_config["if_train"] = False
-    env_instance = env_class(data_config=data_config)
+    env_instance = env_class(data_config=data_config,
+                             initial_capital=initial_capital)
 
     # run prediction episode.
-    if drl_lib == "stable_baseline3":
+    if drl_lib == "stable_baselines3":
         episode_total_assets = DRLAgent.DRL_prediction_load_from_file(
             model_name=model_name,
             cwd=cwd,

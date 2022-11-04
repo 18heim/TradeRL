@@ -52,7 +52,8 @@ class DataProcessor:
             print(f"{self.data_source} is NOT supported yet.")
 
         self.processor = processor_dict.get(self.data_source)(
-            start_date, end_date, time_interval, api_config
+            time_interval=time_interval, start_date=start_date,
+            end_date=end_date, api_config=api_config,
         )
         print(f"{self.data_source} successfully connected")
         # except:
@@ -113,7 +114,6 @@ class DataProcessor:
         technical_indicator_list: List[str],
         if_vix: bool,
         cache: bool = False,
-        select_stockstats_talib: int = 0,
     ):
 
         if self.time_interval == "1s" and self.data_source != "binance":
