@@ -14,7 +14,8 @@ def test(drl_lib: str,
          cwd: Path,
          env_class: Any,
          model_name: str,
-         initial_capital: float):
+         initial_capital: float,
+         max_trade: float):
     """Testing RL Model."""
     # read parameters and load agents
     cwd = cwd / model_name
@@ -28,7 +29,8 @@ def test(drl_lib: str,
     # build environment using processed data
     data_config["if_train"] = False
     env_instance = env_class(data_config=data_config,
-                             initial_capital=initial_capital)
+                             initial_capital=initial_capital,
+                             max_trade=max_trade)
 
     # run prediction episode.
     if drl_lib == "stable_baselines3":

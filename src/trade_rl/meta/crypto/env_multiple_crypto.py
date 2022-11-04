@@ -24,6 +24,8 @@ class CryptoEnv(gym.Env):
         data_config,
         lookback=1,
         initial_capital=1e6,
+        max_trade=1e3,
+        min_trade=20,
         buy_cost_pct=1e-3,
         sell_cost_pct=1e-3,
         gamma=0.99,
@@ -33,11 +35,11 @@ class CryptoEnv(gym.Env):
         self.initial_cash = initial_capital
         self.buy_cost_pct = buy_cost_pct
         self.sell_cost_pct = sell_cost_pct
-        self.max_stock = 1
+        self.max_trade = max_trade
+        self.min_trade = min_trade
         self.gamma = gamma
         self.price_array = data_config["price_array"]
         self.tech_array = data_config["tech_array"]
-        self._generate_action_normalizer()
         self.crypto_num = self.price_array.shape[1]
         self.max_step = self.price_array.shape[0] - lookback - 1
 
@@ -104,28 +106,29 @@ class CryptoEnv(gym.Env):
         """
         self.time += 1
         price = self.price_array[self.time]
-        # Normalize actions.
+        # Normalize action and change to qty.
+        actions_cash = actions * self.max_trade
         for i in range(self.action_dim):
-            norm_vector_i = self.action_norm_vector[i]
-            actions[i] = actions[i] * norm_vector_i
+            actions[i] = actions_cash[i] / price[i]
 
         # Sell stock.
-        for index in np.where(actions < 0)[0]:
+        for index in np.where(actions_cash < -self.min_trade)[0]:
             if price[index] > 0:  # Sell only if current asset is > 0
-                sell_num_shares = min(self.stocks[index], -actions[index])
+                sell_num_shares = min(self.stocks[index], - actions[index])
                 self.stocks[index] -= sell_num_shares
                 self.cash += price[index] * \
                     sell_num_shares * (1 - self.sell_cost_pct)
 
         # Buy stock
-        for index in np.where(actions > 0)[0]:  # buy_index:
+        for index in np.where(actions_cash > self.min_trade)[0]:  # buy_index:
             if (
                 price[index] > 0
             ):  # Buy only if the price is > 0 (no missing data in this particular date)
-                buy_num_shares = min(self.cash // price[index], actions[index])
+                buy_num_shares = min(self.cash / price[index], actions[index])
                 self.stocks[index] += buy_num_shares
                 self.cash -= price[index] * \
                     buy_num_shares * (1 + self.buy_cost_pct)
+
         done = self.time == self.max_step
         # Update state
         state = self.get_state()

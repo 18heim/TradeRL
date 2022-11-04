@@ -22,7 +22,8 @@ class AlpacaPaperTradingMultiCrypto:
         action_dim,
         api_config,
         tech_indicator_list,
-        max_stock=1e2,
+        max_trade=1e3,
+        min_trade=20,
     ):
         # load agent
         if agent == "ppo":
@@ -48,7 +49,8 @@ class AlpacaPaperTradingMultiCrypto:
             )
         # read trading settings
         self.tech_indicator_list = tech_indicator_list
-        self.max_stock = max_stock
+        self.max_trade = max_trade
+        self.min_trade = min_trade
         self.previous_candles = 250
         self.lookback = 1
         self.action_dim = action_dim
@@ -117,27 +119,26 @@ class AlpacaPaperTradingMultiCrypto:
         state = self.get_state()
 
         # Get action
+        # Normalize action and change to qty.
         action = self.model.predict(state)[0]
-        # action = (action * self.max_stock).astype(float)
-
-        print("\n" + "ACTION:    ", action, "\n")
-        # Normalize action
-        action_norm_vector = generate_action_normalizer(self.price)
+        action_cash = action * self.max_trade
+        print("\n" + "ACTION CASH:    ", action, "\n")
         for i in range(self.action_dim):
-            norm_vector_i = action_norm_vector[i]
-            action[i] = action[i] * norm_vector_i
+            action[i] = action_cash[i] / self.price[i]
 
-        print("\n" + "NORMALIZED ACTION:    ", action, "\n")
+        print("\n" + "ACTION QTY:    ", action, "\n")
+
+        print("\n", "ACTION HELD", self.stocks)
 
         self.stocks_cd += 1
-        min_action = 10 ** -(self.action_decimals)  # stock_cd
         # Sell stock
-        for index in np.where(action < -min_action)[0]:  # sell_index:
+        # sell_index:
+        for index in np.where(action_cash < - self.min_trade)[0]:
             sell_num_shares = min(self.stocks[index], -action[index])
 
             qty = abs(float(sell_num_shares))
             qty = round(qty, self.action_decimals)
-            print("SELL, qty:", qty)
+            print("SELL, qty:", qty, ",cash:", qty * self.price[index])
 
             respSO = []
             tSubmitOrder = threading.Thread(
@@ -150,9 +151,9 @@ class AlpacaPaperTradingMultiCrypto:
             self.cash = float(self.alpaca.api.get_account().cash)
             self.stocks_cd[index] = 0
         # Buy stock
-        for index in np.where(action > min_action)[0]:  # buy_index:
+        print("current cash:", max(self.cash, 0))
+        for index in np.where(action_cash > self.min_trade)[0]:  # buy_index:
             tmp_cash = max(self.cash, 0)
-            print("current cash:", tmp_cash)
             # Adjusted part to accept decimal places up to two
             buy_num_shares = min(
                 tmp_cash / self.price[index], abs(float(action[index]))
@@ -160,7 +161,7 @@ class AlpacaPaperTradingMultiCrypto:
 
             qty = abs(float(buy_num_shares))
             qty = round(qty, self.action_decimals)
-            print("BUY, qty:", qty)
+            print("BUY, qty:", qty, ",cash:", qty * self.price[index])
 
             respSO = []
             tSubmitOrder = threading.Thread(
@@ -180,7 +181,7 @@ class AlpacaPaperTradingMultiCrypto:
 
         State comprises:
             - Cash balance
-            - Stock qty held 
+            - Stock qty held
             - (tech_indicators, price) for each stock for
                 a certain number of lookback time steps
         """
@@ -198,7 +199,7 @@ class AlpacaPaperTradingMultiCrypto:
         stocks = [0] * len(self.stockUniverse)
         for position in positions:
             ind = self.stockUniverse.index(position.symbol)
-            stocks[ind] = abs(int(float(position.qty)))
+            stocks[ind] = abs(float(position.qty))
         stocks = np.asarray(stocks, dtype=float)
         self.stocks = stocks
 
@@ -208,7 +209,7 @@ class AlpacaPaperTradingMultiCrypto:
 
         # Stack cash and stocks
         state = np.hstack((self.cash * constants.CASH_SCALE,
-                          self.stocks * constants.STOCK_QTY_SCALE))
+                           self.stocks * constants.STOCK_QTY_SCALE))
         normalized_tech = cur_tech * constants.TECH_SCALE
         normalized_price = cur_price * constants.CASH_SCALE
         state = np.hstack(

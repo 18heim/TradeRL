@@ -77,7 +77,7 @@ TIME_ZONE_SELFDEFINED = "Europe/Paris"
 USE_TIME_ZONE_SELFDEFINED = 0  # 0 (default) or 1 (use the self defined)
 
 # parameters for data sources
-ALPACA_API_KEY = "PKEIK4CR04Q07GSQ6XQQ"  # your ALPACA_API_KEY
-ALPACA_API_SECRET = "W2canh1LeJt1vBMejpQ6QrDXR19X4nxvKWC13OyS"  # your ALPACA_API_SECRET
+ALPACA_API_KEY = "PK6VJQWNAUKR3VKVC1FF"  # your ALPACA_API_KEY
+ALPACA_API_SECRET = "cPmy45CQfjkRsrMesPXSIGqbe2YRAxXBGXsXYr2l"  # your ALPACA_API_SECRET
 ALPACA_API_BASE_URL = "https://paper-api.alpaca.markets"  # alpaca url
 BINANCE_BASE_URL = "https://data.binance.vision/"  # binance url
